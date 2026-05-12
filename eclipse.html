@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日、月食模擬器 - Technical Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap');
+
+        :root {
+            --bg: #020617;
+            --card: #0f172a;
+            --border: #334155;
+            --accent: #facc15;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --font-mono: 'JetBrains Mono', monospace;
+            --font-sans: 'Inter', sans-serif;
+        }
+
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background: var(--bg); 
+            color: var(--text); 
+            font-family: var(--font-sans); 
+            height: 100vh;
+        }
+
+        .grid-container { 
+            display: grid; 
+            grid-template-areas: 'A A' 'B C';
+            grid-template-rows: 60vh 40vh;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px;
+            background-color: var(--border);
+            height: 100%;
+        }
+
+        .section {
+            background-color: var(--card);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .section-header {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 50;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 4px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            backdrop-filter: blur(4px);
+        }
+
+        canvas { 
+            display: block; 
+            width: 100%; 
+            height: 100%; 
+        }
+
+        .control-panel { 
+            position: absolute; 
+            top: 48px; 
+            left: 12px; 
+            z-index: 100; 
+            width: 220px;
+            background: rgba(15, 23, 42, 0.9); 
+            border: 1px solid var(--border);
+            padding: 12px; 
+            border-radius: 8px; 
+            font-size: 11px; 
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .switch-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .label {
+            color: var(--text-muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .slider {
+            width: 100%;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .btn-switch { 
+            background: var(--bg); 
+            border: 1px solid var(--border); 
+            color: var(--text-muted); 
+            padding: 4px 12px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-switch:hover {
+            border-color: var(--text-muted);
+            color: var(--text);
+        }
+
+        .btn-switch.active { 
+            background: var(--accent); 
+            color: var(--bg); 
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+
+        #data-stream {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-muted);
+            z-index: 50;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 2px 8px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-container">
+        <section class="section" style="grid-area: A;">
+            <span class="section-header">區域 A：軌道幾何模擬圖</span>
+            <div id="data-stream">SYSTEM_STABLE: ORBIT_SYNC_ACTIVE | RADAR_TRACKING: TRUE</div>
+            <div class="control-panel">
+                <div class="control-item">
+                    <label class="label">月地距離參數 (MOON_DIST)</label>
+                    <input type="range" id="moon-dist-slider" class="slider" min="100" max="250" value="175">
+                </div>
+                <div class="switch-row">
+                    <span class="label">地球自轉 (ROT)</span>
+                    <button id="toggle-earth-rot" class="btn-switch">OFF</button>
+                </div>
+                <div class="switch-row">
+                    <span class="label">月球公轉 (ORB)</span>
+                    <button id="toggle-moon-orbit" class="btn-switch">OFF</button>
+                </div>
+                <div class="switch-row">
+                    <span class="label">地球本/半影 (E_SHAD)</span>
+                    <button id="toggle-earth-shadow" class="btn-switch">OFF</button>
+                </div>
+                <div class="switch-row">
+                    <span class="label">月球本/半影 (M_SHAD)</span>
+                    <button id="toggle-moon-shadow" class="btn-switch">OFF</button>
+                </div>
+                <div class="switch-row">
+                    <span class="label">人的視線 (VIEW)</span>
+                    <button id="toggle-person-view" class="btn-switch">OFF</button>
+                </div>
+                <div class="mt-2 text-[10px] text-slate-500 italic">
+                    INTERACTION: Drag celestial bodies to adjust position
+                </div>
+            </div>
+            <canvas id="canvas-a"></canvas>
+        </section>
+
+        <section class="section" style="grid-area: B;">
+            <span class="section-header">區域 B：地平線觀測視野</span>
+            <canvas id="canvas-b"></canvas>
+        </section>
+
+        <section class="section" style="grid-area: C;">
+            <span class="section-header">區域 C：月球視角 (對向太陽)</span>
+            <canvas id="canvas-c"></canvas>
+        </section>
+    </div>
+
+    <script>
+        const canvasA = document.getElementById('canvas-a');
+        const canvasB = document.getElementById('canvas-b');
+        const canvasC = document.getElementById('canvas-c');
+        const ctxA = canvasA.getContext('2d');
+        const ctxB = canvasB.getContext('2d');
+        const ctxC = canvasC.getContext('2d');
+
+        // State variables
+        let moonDist = 175;
+        let moonAngle = 0; // Relative to Earth-Sun line. 0 is behind Earth, PI is between Earth-Sun
+        let earthRotationAngle = 0;
+        let personAngle = 0; // Relative to rotating Earth
+        let isEarthRotating = false;
+        let isMoonOrbiting = false;
+        let showEarthShadow = false;
+        let showMoonShadow = false;
+        let showPersonView = false;
+
+        const earthRadius = 45;
+        const sunVisualRadius = 80;
+        const moonRadius = 13; 
+
+        // UI Handlers
+        document.getElementById('moon-dist-slider').oninput = (e) => moonDist = parseFloat(e.target.value);
+        document.getElementById('toggle-earth-rot').onclick = (e) => {
+            isEarthRotating = !isEarthRotating;
+            e.target.classList.toggle('active', isEarthRotating);
+            e.target.textContent = isEarthRotating ? 'ON' : 'OFF';
+        };
+        document.getElementById('toggle-moon-orbit').onclick = (e) => {
+            isMoonOrbiting = !isMoonOrbiting;
+            e.target.classList.toggle('active', isMoonOrbiting);
+            e.target.textContent = isMoonOrbiting ? 'ON' : 'OFF';
+        };
+        document.getElementById('toggle-earth-shadow').onclick = (e) => {
+            showEarthShadow = !showEarthShadow;
+            e.target.classList.toggle('active', showEarthShadow);
+            e.target.textContent = showEarthShadow ? 'ON' : 'OFF';
+        };
+        document.getElementById('toggle-moon-shadow').onclick = (e) => {
+            showMoonShadow = !showMoonShadow;
+            e.target.classList.toggle('active', showMoonShadow);
+            e.target.textContent = showMoonShadow ? 'ON' : 'OFF';
+        };
+        document.getElementById('toggle-person-view').onclick = (e) => {
+            showPersonView = !showPersonView;
+            e.target.classList.toggle('active', showPersonView);
+            e.target.textContent = showPersonView ? 'ON' : 'OFF';
+        };
+
+        function resize() {
+            canvasA.width = canvasA.offsetWidth;
+            canvasA.height = canvasA.offsetHeight;
+            canvasB.width = canvasB.offsetWidth; canvasB.height = canvasB.offsetHeight;
+            canvasC.width = canvasC.offsetWidth; canvasC.height = canvasC.offsetHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let dragging = null;
+        canvasA.addEventListener('mousedown', startDrag);
+        canvasA.addEventListener('mousemove', doDrag);
+        canvasA.addEventListener('mouseup', endDrag);
+
+        function getPos(e) {
+            const rect = canvasA.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function startDrag(e) {
+            const pos = getPos(e);
+            const earthX = canvasA.width * 0.3;
+            const earthY = canvasA.height / 2;
+
+            const mx = earthX + Math.cos(moonAngle) * moonDist;
+            const my = earthY + Math.sin(moonAngle) * moonDist;
+            if (Math.hypot(pos.x - mx, pos.y - my) < 25) { dragging = 'moon'; return; }
+
+            const px = earthX + Math.cos(personAngle + earthRotationAngle) * (earthRadius + 5);
+            const py = earthY + Math.sin(personAngle + earthRotationAngle) * (earthRadius + 5);
+            if (Math.hypot(pos.x - px, pos.y - py) < 25) { dragging = 'person'; return; }
+        }
+
+        function doDrag(e) {
+            if (!dragging) return;
+            const pos = getPos(e);
+            const earthX = canvasA.width * 0.3;
+            const earthY = canvasA.height / 2;
+            const angle = Math.atan2(pos.y - earthY, pos.x - earthX);
+            if (dragging === 'moon') moonAngle = angle;
+            else if (dragging === 'person') personAngle = angle - earthRotationAngle;
+        }
+        function endDrag() { dragging = null; }
+
+        function drawShadowCones(ctx, lx, ly, lr, bx, by, br, colorUmbra, colorPenumbra) {
+            const angleField = Math.atan2(by - ly, bx - lx);
+            const perp = angleField + Math.PI / 2;
+            
+            const s1 = { x: lx + Math.cos(perp) * lr, y: ly + Math.sin(perp) * lr };
+            const s2 = { x: lx - Math.cos(perp) * lr, y: ly - Math.sin(perp) * lr };
+            
+            const b1 = { x: bx + Math.cos(perp) * br, y: by + Math.sin(perp) * br };
+            const b2 = { x: bx - Math.cos(perp) * br, y: by - Math.sin(perp) * br };
+
+            const extendDist = 2000;
+            
+            const u1 = { x: s1.x + Math.cos(Math.atan2(b1.y - s1.y, b1.x - s1.x)) * extendDist, y: s1.y + Math.sin(Math.atan2(b1.y - s1.y, b1.x - s1.x)) * extendDist };
+            const u2 = { x: s2.x + Math.cos(Math.atan2(b2.y - s2.y, b2.x - s2.x)) * extendDist, y: s2.y + Math.sin(Math.atan2(b2.y - s2.y, b2.x - s2.x)) * extendDist };
+            
+            const p1 = { x: s1.x + Math.cos(Math.atan2(b2.y - s1.y, b2.x - s1.x)) * extendDist, y: s1.y + Math.sin(Math.atan2(b2.y - s1.y, b2.x - s1.x)) * extendDist };
+            const p2 = { x: s2.x + Math.cos(Math.atan2(b1.y - s2.y, b1.x - s2.x)) * extendDist, y: s2.y + Math.sin(Math.atan2(b1.y - s2.y, b1.x - s2.x)) * extendDist };
+
+            ctx.fillStyle = colorPenumbra;
+            ctx.beginPath();
+            ctx.moveTo(b1.x, b1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.lineTo(b2.x, b2.y);
+            ctx.fill();
+
+            ctx.fillStyle = colorUmbra;
+            ctx.beginPath();
+            ctx.moveTo(b1.x, b1.y);
+            ctx.lineTo(u1.x, u1.y);
+            ctx.lineTo(u2.x, u2.y);
+            ctx.lineTo(b2.x, b2.y);
+            ctx.fill();
+
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(s1.x, s1.y); ctx.lineTo(u1.x, u1.y);
+            ctx.moveTo(s2.x, s2.y); ctx.lineTo(u2.x, u2.y);
+            ctx.moveTo(s1.x, s1.y); ctx.lineTo(p1.x, p1.y);
+            ctx.moveTo(s2.x, s2.y); ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+        }
+
+        function loop() {
+            if (isEarthRotating) earthRotationAngle -= 0.005;
+            if (isMoonOrbiting) moonAngle -= 0.005;
+
+            // Update data stream
+            const ds = document.getElementById('data-stream');
+            if (ds) {
+                ds.textContent = `SYSTEM_STABLE: ORBIT_SYNC | MOON_ANG: ${(moonAngle % (Math.PI * 2)).toFixed(2)}rad | EARTH_ROT: ${(earthRotationAngle % (Math.PI * 2)).toFixed(2)}rad | M_DIST: ${moonDist.toFixed(1)}px`;
+            }
+
+            update();
+            requestAnimationFrame(loop);
+        }
+
+        function update() {
+            const ex = canvasA.width * 0.3;
+            const ey = canvasA.height / 2;
+            const sx = canvasA.width - 50; 
+            const sy = canvasA.height / 2;
+            const sunRad = 100;
+
+            const mx = ex + Math.cos(moonAngle) * moonDist;
+            const my = ey + Math.sin(moonAngle) * moonDist;
+            const pAbs = earthRotationAngle + personAngle;
+            const px = ex + Math.cos(pAbs) * (earthRadius + 2);
+            const py = ey + Math.sin(pAbs) * (earthRadius + 2);
+
+            // Block A
+            ctxA.clearRect(0,0,canvasA.width, canvasA.height);
+            
+            // Person's View
+            if (showPersonView) {
+                ctxA.strokeStyle = '#ff9100'; 
+                ctxA.lineWidth = 1;
+                ctxA.beginPath();
+                ctxA.moveTo(px, py); ctxA.lineTo(sx, sy - 100);
+                ctxA.moveTo(px, py); ctxA.lineTo(sx, sy + 100);
+                ctxA.stroke();
+            }
+
+            // Orbit
+            ctxA.strokeStyle = '#222'; ctxA.beginPath(); ctxA.arc(ex, ey, moonDist, 0, Math.PI*2); ctxA.stroke();
+
+            // Proper Shadow Rendering using Sun Disk in Area A
+            if (showEarthShadow) {
+                drawShadowCones(ctxA, sx, sy, sunRad, ex, ey, earthRadius, 'rgba(10,10,10,0.85)', 'rgba(60,60,60,0.35)');
+            }
+            if (showMoonShadow) {
+                drawShadowCones(ctxA, sx, sy, sunRad, mx, my, moonRadius, 'rgba(10,10,10,0.85)', 'rgba(60,60,60,0.35)');
+            }
+
+            // Sun
+            ctxA.fillStyle = '#fff9c4'; ctxA.beginPath(); ctxA.arc(canvasA.width - 50, sy, 100, 0, Math.PI*2); ctxA.fill();
+
+            // Earth
+            ctxA.save(); ctxA.translate(ex, ey);
+            ctxA.fillStyle = '#1a237e'; ctxA.beginPath(); ctxA.arc(0, 0, earthRadius, 0, Math.PI*2); ctxA.fill();
+            ctxA.fillStyle = '#64b5f6'; ctxA.beginPath(); ctxA.arc(0, 0, earthRadius, -Math.PI/2, Math.PI/2); ctxA.fill();
+            // Person marker
+            ctxA.rotate(pAbs);
+            ctxA.fillStyle = '#ff5252'; ctxA.beginPath(); ctxA.arc(earthRadius + 3, 0, 5, 0, Math.PI*2); ctxA.fill();
+            ctxA.restore();
+
+            // Detailed Moon Eclipse Rendering
+            let mColorLight = '#e0e0e0', mColorDark = '#424242';
+            // 修正：不論 showEarthShadow 是否開啟，只要角度正確就顯示月食
+            const isEclipse = Math.cos(moonAngle) < 0;
+            const dy = Math.abs(my - ey);
+            const shadowUmbraEdge = earthRadius - 8;
+            const shadowPenumbraEdge = earthRadius + 22;
+
+            ctxA.save(); ctxA.translate(mx, my);
+            // Draw unlit part (standard unlit moon color)
+            ctxA.fillStyle = mColorDark; ctxA.beginPath(); ctxA.arc(0, 0, moonRadius, 0, Math.PI*2); ctxA.fill();
+
+            if (isEclipse) {
+                if (dy < shadowUmbraEdge - moonRadius) {
+                    // 3. Total Lunar Eclipse (Blood Moon)
+                    mColorLight = '#8b0000'; // Dark Red
+                } else if (dy < shadowPenumbraEdge + moonRadius) {
+                    // 2. Partial or Penumbral
+                    if (dy < shadowUmbraEdge + moonRadius) {
+                        // Moon crosses Umbra edge: draw split
+                        // We use a clipping path or specific arcs to show the umbra/penumbra split
+                        ctxA.save();
+                        ctxA.beginPath(); ctxA.arc(0, 0, moonRadius, -Math.PI/2, Math.PI/2); ctxA.clip();
+                        
+                        // Draw light part in penumbra (gray)
+                        ctxA.fillStyle = '#bdbdbd';
+                        ctxA.fill();
+                        
+                        // Overlay the umbra part (black)
+                        // Earth shadow is a horizontal cylinder in Area A.
+                        // In moon local coords, the shadow center is at (0, ey - my)
+                        ctxA.fillStyle = '#000000';
+                        ctxA.beginPath();
+                        ctxA.arc(0, ey - my, shadowUmbraEdge, 0, Math.PI*2);
+                        ctxA.fill();
+                        ctxA.restore();
+                        mColorLight = null; // Already drawn
+                    } else {
+                        // 1. Penumbral only (Gray)
+                        mColorLight = '#bdbdbd';
+                    }
+                }
+            }
+            
+            if (mColorLight) {
+                ctxA.fillStyle = mColorLight; ctxA.beginPath(); ctxA.arc(0, 0, moonRadius, -Math.PI/2, Math.PI/2); ctxA.fill();
+            }
+            ctxA.restore();
+
+            // Block B (Perspective centered on Person)
+            const groundY = canvasB.height * 0.8;
+            const skyRange = canvasB.height * 0.6;
+            
+            // Relative angles from person perspective in Block A
+            const vecPersonSun = { x: sx - px, y: sy - py };
+            const vecPersonMoon = { x: mx - px, y: my - py };
+            const distPS = Math.hypot(vecPersonSun.x, vecPersonSun.y);
+            const distPM = Math.hypot(vecPersonMoon.x, vecPersonMoon.y);
+            
+            const sunAngleFromPerson = Math.atan2(vecPersonSun.y, vecPersonSun.x);
+            const moonAngleFromPerson = Math.atan2(vecPersonMoon.y, vecPersonMoon.x);
+            
+            let sunElevB = sunAngleFromPerson - pAbs;
+            while(sunElevB > Math.PI) sunElevB -= Math.PI*2;
+            while(sunElevB < -Math.PI) sunElevB += Math.PI*2;
+
+            let moonElevB = moonAngleFromPerson - pAbs;
+            while(moonElevB > Math.PI) moonElevB -= Math.PI*2;
+            while(moonElevB < -Math.PI) moonElevB += Math.PI*2;
+
+            // Detailed visual constants for B
+            const sunAngRadiusA = sunRad / distPS;
+            const moonAngRadiusA = moonRadius / distPM;
+            
+            // To ensure perfect tangency in Block B, the size of the disks must be
+            // proportional to the skyRange (radius of the arc they are drawn on).
+            // This way, separation skyRange * dTheta = size1 + size2.
+            const sunSizeB = skyRange * sunAngRadiusA;
+            const moonSizeB = skyRange * moonAngRadiusA;
+
+            // Background color and sky lighting check
+            const sunCos = Math.cos(sunElevB);
+            let skyBaseColor = (sunCos > 0) ? '#87ceeb' : '#000';
+            
+            // 修正：區域B在白天的時候，天空的顏色保持固定，不再因為月球影子而變暗
+            
+            ctxB.fillStyle = skyBaseColor;
+            ctxB.fillRect(0,0,canvasB.width, canvasB.height);
+            ctxB.fillStyle = '#2e7d32'; ctxB.fillRect(0, groundY, canvasB.width, canvasB.height - groundY);
+            
+            // Labels for East/West
+            ctxB.fillStyle = 'rgba(255,255,255,0.7)';
+            ctxB.font = 'bold 12px Inter';
+            ctxB.fillText('東方 (EAST)', 20, groundY + 20);
+            ctxB.textAlign = 'right';
+            ctxB.fillText('西方 (WEST)', canvasB.width - 20, groundY + 20);
+            ctxB.textAlign = 'left';
+            
+            function drawB(angle, color, size, isMoon = false) {
+                // The position on the canvas is calculated as a projection onto a circle of 'skyRange'
+                const bx = canvasB.width/2 + Math.sin(angle) * skyRange;
+                const by = groundY - Math.cos(angle) * skyRange;
+                
+                if (by < groundY + size) {
+                    ctxB.beginPath(); ctxB.arc(bx, by, size, 0, Math.PI*2);
+                    if (isMoon) {
+                        // Default moon colors
+                        const isFullMoon = Math.cos(moonAngle) < 0;
+                        let baseColor = isFullMoon ? '#fff' : '#111';
+                        
+                        // Lunar eclipse logic in Block B
+                        // 修正：不論是否開啟按鈕都會產生變化
+                        if (isFullMoon) {
+                            if (dy < shadowUmbraEdge - moonRadius) {
+                                // Total Lunar Eclipse
+                                baseColor = '#8b0000';
+                            } else if (dy < shadowPenumbraEdge + moonRadius) {
+                                if (dy < shadowUmbraEdge + moonRadius) {
+                                    // Partial Umbra: Draw curved shadow bite
+                                    ctxB.save();
+                                    ctxB.fillStyle = '#bdbdbd'; // Penumbra color
+                                    ctxB.beginPath(); ctxB.arc(bx, by, size, 0, Math.PI * 2); ctxB.fill();
+                                    ctxB.beginPath(); ctxB.arc(bx, by, size, 0, Math.PI * 2); ctxB.clip();
+                                    
+                                    const sRadB = size * (shadowUmbraEdge / moonRadius);
+                                    // Inverted offset direction to match West-to-East orbital motion (East limb enters first)
+                                    const shadowOffset = (ey - my) * (size / moonRadius);
+                                    
+                                    ctxB.fillStyle = '#000'; // Deep umbra
+                                    ctxB.beginPath();
+                                    ctxB.arc(bx - shadowOffset, by, sRadB, 0, Math.PI * 2);
+                                    ctxB.fill();
+                                    ctxB.restore();
+                                    return;
+                                } else {
+                                    // Penumbral only
+                                    baseColor = '#bdbdbd';
+                                }
+                            }
+                        }
+                        ctxB.fillStyle = baseColor;
+                    } else ctxB.fillStyle = color;
+                    ctxB.fill();
+                }
+            }
+            drawB(sunElevB, '#fff176', sunSizeB);
+            drawB(moonElevB, '#eee', moonSizeB, true);
+
+            // Block C (Sun view from Moon)
+            ctxC.clearRect(0,0,canvasC.width, canvasC.height);
+            
+            // Calculate vectors from Moon to Sun and Earth in Area A coordinate space
+            const vMS = { x: sx - mx, y: sy - my };
+            const vME = { x: ex - mx, y: ey - my };
+            const dMS = Math.hypot(vMS.x, vMS.y);
+            const dME = Math.hypot(vME.x, vME.y);
+            
+            // Angular radii calculations (approximate but geometrically consistent)
+            const angRadS = sunRad / dMS;
+            const angRadE = earthRadius / dME;
+            
+            // Visual constants for Area C
+            const sunSizeC = 60; // Base pixel radius for Sun in C
+            const pixelPerRadC = sunSizeC / angRadS;
+            const earthSizeC = angRadE * pixelPerRadC;
+            
+            // Relative angular separation
+            const aS = Math.atan2(vMS.y, vMS.x);
+            const aE = Math.atan2(vME.y, vME.x);
+            let diffAngC = aE - aS;
+            while(diffAngC > Math.PI) diffAngC -= Math.PI*2;
+            while(diffAngC < -Math.PI) diffAngC += Math.PI*2;
+            
+            // Map angular separation to pixels
+            const sepC = diffAngC * pixelPerRadC;
+            
+            // Draw Sun
+            ctxC.fillStyle = '#fff9c4'; 
+            ctxC.beginPath(); 
+            ctxC.arc(canvasC.width/2, canvasC.height/2, sunSizeC, 0, Math.PI*2); 
+            ctxC.fill();
+            
+            // Draw Earth silhouette (Dark blue with slight atmospheric glow)
+            const isTotal = Math.abs(sepC) < (earthSizeC - sunSizeC);
+            if (isTotal) {
+                // Glow effect for total eclipse (refraction)
+                const grad = ctxC.createRadialGradient(canvasC.width/2 + sepC, canvasC.height/2, earthSizeC - 2, canvasC.width/2 + sepC, canvasC.height/2, earthSizeC + 2);
+                grad.addColorStop(0, '#0d1530');
+                grad.addColorStop(0.8, '#ff5722'); // Blood moon ring
+                grad.addColorStop(1, 'rgba(255,87,34,0)');
+                ctxC.fillStyle = grad;
+                ctxC.beginPath(); ctxC.arc(canvasC.width/2 + sepC, canvasC.height/2, earthSizeC + 2, 0, Math.PI*2); ctxC.fill();
+            }
+            
+            ctxC.fillStyle = 'rgba(10, 20, 60, 0.98)';
+            ctxC.beginPath(); 
+            ctxC.arc(canvasC.width/2 + sepC, canvasC.height/2, earthSizeC, 0, Math.PI*2); 
+            ctxC.fill();
+        }
+        loop();
+    </script>
+</body>
+</html>
+
