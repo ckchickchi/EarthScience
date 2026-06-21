@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>山坡空氣塊上升模擬 - 100% 本地即點即用版</title>
+    <!-- Tailwind CSS 3.4 CDN: Direct styling works perfectly offline or in file:// files -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=PingFang+TC&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        :root {
+            --color-natural-bg: #f8f7f2;
+            --color-natural-card: #ffffff;
+            --color-natural-green: #6b8e23;
+            --color-natural-brown: #8b7355;
+            --color-natural-text: #3d3d3d;
+            --color-natural-muted: #4a4a4a;
+            --color-natural-mountain: #d4e0c8;
+            --color-natural-line: #e0e0d1;
+        }
+
+        body {
+            background-color: var(--color-natural-bg);
+            color: var(--color-natural-text);
+            font-family: 'PingFang TC', 'Noto Sans TC', sans-serif;
+            margin: 0;
+            user-select: none;
+            overflow-x: hidden;
+        }
+
+        .natural-card {
+            background-color: var(--color-natural-card);
+            border-radius: 1rem;
+            border: 1px solid var(--color-natural-line);
+            padding: 1.25rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        }
+
+        .natural-header {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--color-natural-brown);
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--color-natural-green);
+            padding-left: 0.625rem;
+        }
+
+        .natural-label {
+            font-size: 14px;
+            color: var(--color-natural-muted);
+            display: block;
+            margin-bottom: 0.125rem;
+        }
+
+        .natural-value {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--color-natural-green);
+        }
+
+        .btn-natural-start {
+            padding: 0.5rem 1.5rem;
+            border-radius: 9999px;
+            background-color: var(--color-natural-green);
+            color: white;
+            font-weight: 600;
+            transition: opacity 0.2s;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .btn-natural-start:hover { opacity: 0.9; }
+        .btn-natural-start:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-natural-reset {
+            padding: 0.5rem 1.5rem;
+            border-radius: 9999px;
+            background-color: var(--color-natural-line);
+            color: var(--color-natural-text);
+            font-weight: 600;
+            transition: opacity 0.2s;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .btn-natural-reset:hover { opacity: 0.9; }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
+        }
+        .cloud-particle {
+            animation: float 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div id="airclimb-container" class="flex flex-col lg:flex-row min-h-[95vh] lg:h-[85vh] w-full max-w-[1500px] max-h-[850px] mx-auto gap-4 overflow-hidden">
+      
+      <!-- LEFT COLUMN: Water Vapor Curve Plot -->
+      <div id="col-chart" class="natural-card w-full lg:w-[480px] xl:w-[500px] flex-shrink-0 flex flex-col relative bg-white">
+        <div class="flex justify-between items-center mb-1">
+          <h2 class="natural-header mb-0">飽和水氣壓曲線</h2>
+          <button 
+            id="btn-info"
+            class="p-1.5 hover:bg-gray-100 rounded-full transition-colors duration-200 text-gray-500 hover:text-[#6b8e23]"
+            title="熱力學常識幫助"
+            onclick="toggleExplanation()"
+          >
+            <!-- Info Icon SVG -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 hover:text-[#6b8e23]">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+          </button>
+        </div>
+
+        <div id="explanation-box" class="hidden p-3 mb-2 bg-[#fdfdf9] border border-[#e0e0d1] rounded-lg text-xs leading-relaxed text-gray-600 transition-all">
+            <h3 class="font-bold text-[#8b7355] mb-1 flex items-center gap-1">
+              <!-- Sparkles Icon SVG -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[#6b8e23]">
+                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+              </svg>
+              熱力學物理原理說明：
+            </h3>
+            <p class="mb-1">
+              1. <strong>乾絕熱上升</strong>：當空氣塊未飽和（溫度 &gt; 露點溫度）上升時，溫度每上升 100m 下降 <strong>1.0°C</strong>，此時實際水氣壓不變。
+            </p>
+            <p class="mb-1">
+              2. <strong>凝結高度 (LCL)</strong>：當空氣溫度降至與露點相同時，達到飽和狀態並開始凝結。此高度即出雲的高度。
+            </p>
+            <p>
+              3. <strong>濕絕熱上升</strong>：飽和後由於釋放潛熱，溫度每上升 100m 僅下降 <strong>0.6°C</strong>，水氣持續凝結析出並保持飽和。
+            </p>
+        </div>
+
+        <div class="flex-1 relative border border-gray-50 rounded-xl bg-gray-50/50 flex items-center justify-center min-h-[220px]">
+          <svg 
+            id="vapor-svg"
+            class="w-full h-full cursor-crosshair touch-none" 
+            viewBox="0 0 550 370"
+            style="touch-action: none;"
+          >
+            <!-- Grid lines & Ticks will be dynamically pre-baked or rendered -->
+            <g id="grid-lines-group"></g>
+            
+            <!-- Axes -->
+            <line x1="55" y1="330" x2="475" y2="330" stroke="#3d3d3d" stroke-width="1.5" />
+            <line x1="55" y1="20" x2="55" y2="330" stroke="#3d3d3d" stroke-width="1.5" />
+
+            <!-- Axis Titles -->
+            <text x="475" y="355" text-anchor="end" class="text-xs fill-[#4a4a4a] font-medium font-sans">溫度 (°C)</text>
+            <text x="25" y="15" text-anchor="start" class="text-xs fill-[#4a4a4a] font-medium font-sans">水氣壓 (hPa)</text>
+
+            <!-- Saturation Vapor Pressure Curve Line -->
+            <path id="curve-path" fill="none" stroke="#8b7355" stroke-width="2" class="opacity-90" />
+            <text x="380" y="105" class="text-[10px] fill-[#8b7355] font-serif italic">es(T) 飽和曲線</text>
+
+            <!-- LCL Condensation Point Marker -->
+            <g id="lcl-point-group" class="hidden">
+              <line id="lcl-h-line" x1="55" y1="0" x2="0" y2="0" stroke="#3498db" stroke-width="1" stroke-dasharray="2 2" />
+              <line id="lcl-v-line" x1="0" y1="330" x2="0" y2="0" stroke="#3498db" stroke-width="1" stroke-dasharray="2 2" />
+              <circle id="lcl-dot" cx="0" cy="0" r="7" fill="#3498db" stroke="#ffffff" stroke-width="2" />
+              <text id="lcl-text" x="0" y="0" class="text-[10px] fill-[#2980b9] font-bold">凝結點 (LCL)</text>
+            </g>
+
+            <!-- Realtime Animating Parcel Point -->
+            <g id="current-parcel-point-group" class="hidden">
+              <circle id="parcel-chart-dot" cx="0" cy="0" r="8" fill="#d12e96" stroke="#ffffff" stroke-width="2" />
+              <text id="parcel-chart-text" x="0" y="0" class="text-[10px] fill-[#b0227f] font-extrabold">上升中</text>
+            </g>
+
+            <!-- Start State/Drag Handle (Red Dot) -->
+            <g id="red-dot-group" class="cursor-pointer">
+              <circle id="dragging-halo" cx="0" cy="0" r="12" fill="#ff4d4d" fill-opacity="0.15" />
+              <circle id="start-dot" cx="0" cy="0" r="8" fill="#ff4d4d" stroke="#ffffff" stroke-width="2" class="hover:scale-125 transition-transform" />
+              <text id="start-dot-text" x="0" y="0" class="text-[10px] fill-[#b32b2b] font-bold">山底空氣塊</text>
+            </g>
+          </svg>
+        </div>
+
+        <div class="mt-2 text-[11px] text-gray-500 py-1 bg-gray-50 rounded-lg text-center flex items-center justify-center gap-1.5 border border-[#e0e0d1]/60">
+          <!-- Compass SVG -->
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[#6b8e23]">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
+          </svg>
+          <span>您可<strong>直接拖曳紅點</strong>，或在右側滑桿設定山底初始數值</span>
+        </div>
+      </div>
+
+      <!-- MIDDLE COLUMN: Controls, Results, Climber Track -->
+      <div id="col-middle" class="flex-1 min-w-0 flex flex-col gap-4">
+        
+        <!-- Top Blocks: Settings & Calculations Side-by-Side -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          <!-- Controls Panel -->
+          <div id="settings-card" class="natural-card flex flex-col justify-between">
+            <div>
+              <h2 class="natural-header flex items-center gap-1.5">
+                <!-- Thermometer SVG -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[#6b8e23]">
+                    <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+                </svg>
+                山底空氣狀態(紅點)
+              </h2>
+              <div class="space-y-3.5 mt-2">
+                <div class="data-item">
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="natural-label">溫度 (T)</span>
+                    <span id="label-t" class="text-[14px] font-semibold text-gray-700 font-mono">30.0 °C</span>
+                  </div>
+                  <input 
+                    id="input-t"
+                    type="range" 
+                    min="-10" 
+                    max="40" 
+                    step="0.1"
+                    value="30"
+                    oninput="updateT(this.value)"
+                    class="w-full h-1.5 bg-gray-200/80 rounded-lg appearance-none cursor-pointer accent-[#6b8e23]"
+                  />
+                </div>
+                <div class="data-item">
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="natural-label">實際水氣壓 (e)</span>
+                    <span id="label-e" class="text-[14px] font-semibold text-gray-700 font-mono">20.00 hPa</span>
+                  </div>
+                  <input 
+                    id="input-e"
+                    type="range" 
+                    min="0" 
+                    max="80" 
+                    step="0.01"
+                    value="20"
+                    oninput="updateE(this.value)"
+                    class="w-full h-1.5 bg-gray-200/80 rounded-lg appearance-none cursor-pointer accent-[#6b8e23]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-[#e0e0d1]/60 grid grid-cols-2 gap-2 text-center">
+              <div class="p-2 bg-gray-50 rounded-xl">
+                <span class="text-[11px] text-gray-500 block">飽和汽壓 (es)</span>
+                <span id="label-es" class="text-sm font-bold text-gray-700 font-mono">42.44 hPa</span>
+              </div>
+              <div class="p-2 bg-gray-50 rounded-xl">
+                <span class="text-[11px] text-gray-500 block">相對濕度 (RH)</span>
+                <span id="label-rh" class="text-sm font-bold text-[#6b8e23] font-mono">47.1 %</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Results Panel -->
+          <div id="results-card" class="natural-card flex flex-col justify-between">
+            <div>
+              <h2 class="natural-header flex items-center gap-1.5">
+                <!-- Droplet SVG -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[#6b8e23]">
+                    <path d="M12 22a7 7 0 0 0 7-7c0-4.3-7-13-7-13S5 11 5 15a7 7 0 0 0 7 7z"/>
+                </svg>
+                爬升動態運算
+              </h2>
+              <div class="space-y-3 mt-3">
+                <div class="flex items-center justify-between py-1.5 border-b border-gray-100">
+                  <span class="natural-label mb-0">凝結高度 (LCL)</span>
+                  <div class="text-right">
+                    <span id="res-lcl" class="text-base font-bold text-[#6b8e23] font-mono">--</span>
+                    <span class="text-xs text-gray-500 ml-1">m</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between py-1.5 border-b border-gray-100">
+                  <span class="natural-label mb-0">露點溫度 (Td)</span>
+                  <div class="text-right font-mono">
+                    <span id="res-td" class="text-base font-bold text-gray-700">--</span>
+                    <span class="text-xs text-gray-500 ml-1">°C</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between py-1.5">
+                  <span class="natural-label mb-0">山頂溫度 (T_peak)</span>
+                  <div class="text-right font-mono">
+                    <span id="res-tpeak" class="text-base font-bold text-[#8b7355]">--</span>
+                    <span class="text-xs text-gray-500 ml-1">°C</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-2 bg-[#fdfdf9] border border-dashed border-[#e0e0d1] rounded-xl text-center">
+              <span class="text-[11px] text-gray-500 block">當前空氣塊狀態 (<span id="parcel-h" class="font-mono">0</span>m)</span>
+              <div class="flex justify-around items-center mt-1">
+                <span class="text-xs text-gray-600 font-medium">盤溫: <span id="parcel-temp" class="font-mono font-bold text-gray-700">30.0°C</span></span>
+                <span class="text-xs text-gray-600 font-medium">露點: <span id="parcel-dew" class="font-mono font-bold text-gray-700">17.5°C</span></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Mountain Ascent Animation View -->
+        <div id="mountain-card" class="natural-card flex-1 relative flex flex-col min-h-[250px] bg-white overflow-hidden">
+          <div class="absolute top-4 left-4 z-10 flex gap-2.5">
+            <button 
+              id="btn-play"
+              onclick="startAscent()"
+              class="btn-natural-start"
+            >
+              <!-- Play Icon SVG -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+              開始爬升
+            </button>
+            <button 
+              id="btn-reset"
+              onclick="resetAscent()"
+              class="btn-natural-reset"
+            >
+              <!-- Reset SVG -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                  <polyline points="3 3 3 8 8 8"/>
+              </svg>
+              重置
+            </button>
+          </div>
+
+          <div class="flex-1 w-full h-full relative mt-8">
+            <svg 
+              id="mountain-svg"
+              class="w-full h-full overflow-visible" 
+              viewBox="0 0 520 280"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <!-- Sky Background Gradient -->
+              <defs>
+                <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#e8f4fd" />
+                  <stop offset="60%" stop-color="#f4f9fd" />
+                  <stop offset="100%" stop-color="#f8f7f2" />
+                </linearGradient>
+                <linearGradient id="mountainGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#c5d8b4" />
+                  <stop offset="100%" stop-color="#abbfa4" />
+                </linearGradient>
+                <linearGradient id="lclLineGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#3498db" stop-opacity="0.8" />
+                  <stop offset="100%" stop-color="#3498db" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+
+              <rect width="520" height="280" fill="url(#skyGrad)" rx="10" />
+
+              <!-- LCL Height Reference Plain line -->
+              <g id="lcl-mountain-group" class="hidden">
+                <line 
+                  id="lcl-mountain-line"
+                  x1="0" 
+                  y1="230" 
+                  x2="480" 
+                  y2="230" 
+                  stroke="url(#lclLineGrad)" 
+                  stroke-width="1.5" 
+                  stroke-dasharray="4 2" 
+                />
+                <text 
+                  id="lcl-mountain-text"
+                  x="10" 
+                  y="225" 
+                  class="text-[10px] font-bold fill-[#2980b9]"
+                >
+                  凝結高度 (LCL) 1500m
+                </text>
+              </g>
+
+              <!-- Mountain Shape -->
+              <path 
+                d="M 0 230 L 450 80 L 500 80 L 500 260 L 0 260 Z" 
+                fill="url(#mountainGrad)" 
+                stroke="#9db294"
+                stroke-width="1.5"
+                class="opacity-95"
+              />
+
+              <!-- Height Ruler -->
+              <g transform="translate(465, 0)">
+                <line x1="0" y1="230" x2="0" y2="80" stroke="#a0a0a0" stroke-width="1" />
+                <!-- Scale marks -->
+                <line x1="0" y1="230" x2="6" y2="230" stroke="#a0a0a0" />
+                <text x="12" y="234" class="text-[10px] font-mono font-medium fill-[#555]">0m</text>
+                
+                <line x1="0" y1="192.5" x2="6" y2="192.5" stroke="#a0a0a0" />
+                <text x="12" y="196.5" class="text-[10px] font-mono font-medium fill-[#555]">1000m</text>
+
+                <line x1="0" y1="155" x2="6" y2="155" stroke="#a0a0a0" />
+                <text x="12" y="159" class="text-[10px] font-mono font-medium fill-[#555]">2000m</text>
+
+                <line x1="0" y1="117.5" x2="6" y2="117.5" stroke="#a0a0a0" />
+                <text x="12" y="121.5" class="text-[10px] font-mono font-medium fill-[#555]">3000m</text>
+
+                <line x1="0" y1="80" x2="6" y2="80" stroke="#a0a0a0" />
+                <text x="12" y="84" class="text-[10px] font-mono font-medium fill-[#555]">4000m</text>
+              </g>
+
+              <!-- Dynamic Rising Air Parcel -->
+              <g id="air-parcel" transform="translate(0, 230)">
+                <!-- Dry State Circle -->
+                <g id="parcel-dry">
+                  <circle id="ping-ring" r="18" fill="none" stroke="#6b8e23" stroke-width="1" class="hidden" />
+                  <circle r="11" fill="#ffffff" stroke="#6b8e23" stroke-width="2.5" class="shadow-lg" />
+                  <circle r="6" fill="#6b8e23" />
+                  <g transform="translate(-6, -6)">
+                    <!-- Arrow up icon path -->
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                        <polyline points="5 12 12 5 19 12"></polyline>
+                    </svg>
+                  </g>
+                </g>
+                
+                <!-- Saturated Cloud State -->
+                <g id="parcel-cloud" class="cloud-particle hidden">
+                  <ellipse cx="0" cy="18" rx="14" ry="4" fill="#000000" fill-opacity="0.06" />
+                  <circle cx="-12" cy="2" r="10" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1.5" />
+                  <circle cx="12" cy="2" r="10" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1.5" />
+                  <circle cx="0" cy="-8" r="14" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1.5" />
+                  <circle cx="0" cy="6" r="10" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1.5" />
+                  
+                  <circle cx="-12" cy="2" r="9.5" fill="#f0f9ff" />
+                  <circle cx="12" cy="2" r="9.5" fill="#f0f9ff" />
+                  <circle cx="0" cy="-8" r="13.5" fill="#f0f9ff" />
+                  <circle cx="0" cy="6" r="9.5" fill="#f0f9ff" />
+                  
+                  <text y="4" text-anchor="middle" class="text-[9px] font-bold fill-[#0369a1] font-sans">雲塊</text>
+                </g>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: History Table Panel -->
+      <div id="col-history" class="natural-card w-full lg:w-[325px] xl:w-[340px] flex-shrink-0 flex flex-col relative bg-white">
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="natural-header mb-0 flex items-center gap-1.5">
+            <!-- Clipboard icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[#6b8e23]">
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+            </svg>
+            模擬歷史紀錄
+          </h2>
+          <button 
+            id="btn-clear"
+            onclick="clearHistory()"
+            class="hidden text-xs px-2.5 py-1 bg-gray-100 hover:bg-red-50 hover:text-red-600 rounded-lg text-gray-600 transition-all font-medium flex items-center gap-1 border border-gray-100"
+          >
+            <!-- Trash SVG -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/>
+            </svg>
+            清空
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-hidden flex flex-col">
+          <div class="overflow-y-auto flex-1 pr-1">
+            <table class="w-full text-left text-xs">
+              <thead class="sticky top-0 bg-white border-b border-gray-100">
+                <tr class="text-gray-500">
+                  <th class="py-2.5 font-medium">初始 溫/水氣</th>
+                  <th class="py-2.5 font-medium text-center">凝結高度</th>
+                  <th class="py-2.5 font-medium text-right">山頂溫度</th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody" class="divide-y divide-gray-50">
+                <tr>
+                  <td colspan="3" class="py-12 text-center text-gray-400 italic">
+                    <div class="flex flex-col items-center justify-center gap-1 w-full text-gray-300">
+                      <!-- Mountain Icon SVG -->
+                      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-40 mb-1">
+                        <path d="m8 3 4 8 5-5 5 15H2L8 3z"/>
+                      </svg>
+                      <span>尚未有爬升模擬紀錄</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- PURE VANILLA JAVASCRIPT: 100% RELIABLE UNDER file:/// RUNNING CONDITIONS -->
+    <script>
+        // --- Physics & Math Constants ---
+        const TEMP_RANGE = [-10, 40];
+        const VP_RANGE = [0, 80];
+        const MAX_HEIGHT = 4000;
+
+        const getEs = (T) => 6.11 * Math.pow(10, (7.5 * T) / (237.3 + T));
+        const getTd = (e) => {
+            if (e <= 0) return -10;
+            const log = Math.log10(e / 6.11);
+            return (237.3 * log) / (7.5 - log);
+        };
+
+        // --- Core Application State ---
+        let envT = 30;
+        let envE = 20;
+        let isAnimating = false;
+        let currentH = 0;
+        let animationFrameId = null;
+
+        let simulationLcl = null;
+        let simulationLclTd = null;
+        let simulationSummitT = null;
+
+        let history = [];
+
+        // --- Vector Coord Translators for the Plot ---
+        const getSvgCoords = (T, e) => {
+            const x = 55 + ((T - TEMP_RANGE[0]) / (TEMP_RANGE[1] - TEMP_RANGE[0])) * 420;
+            const y = 330 - (e / VP_RANGE[1]) * 310;
+            return [x, y];
+        };
+
+        const calculateTAndEFromSvgCoords = (svgX, svgY) => {
+            let t = TEMP_RANGE[0] + ((svgX - 55) / 420) * (TEMP_RANGE[1] - TEMP_RANGE[0]);
+            t = Math.max(TEMP_RANGE[0], Math.min(TEMP_RANGE[1], t));
+
+            let e = ((330 - svgY) / 310) * VP_RANGE[1];
+            const maxE = getEs(t);
+            e = Math.max(VP_RANGE[0], Math.min(maxE, e));
+
+            return [t, e];
+        };
+
+        // --- Setup Vector Saturation curve plot lines & grid ---
+        const setupChartPlot = () => {
+            const gridGroup = document.getElementById('grid-lines-group');
+            gridGroup.innerHTML = '';
+
+            const tempTicks = [-10, 0, 10, 20, 30, 40];
+            const vpTicks = [0, 10, 20, 30, 40, 50, 60, 70, 80];
+
+            // Render background lines
+            tempTicks.forEach(t => {
+                const [x] = getSvgCoords(t, 0);
+                gridGroup.innerHTML += `
+                    <line x1="${x}" y1="20" x2="${x}" y2="330" stroke="#eaeae0" stroke-width="1" stroke-dasharray="${t === 0 ? '0' : '3 3'}" />
+                    <text x="${x}" y="345" text-anchor="middle" class="text-[11px] fill-[#7a7a7a] font-mono font-medium">${t}</text>
+                `;
+            });
+
+            vpTicks.forEach(vp => {
+                const [, y] = getSvgCoords(0, vp);
+                gridGroup.innerHTML += `
+                    <line x1="55" y1="${y}" x2="475" y2="${y}" stroke="#eaeae0" stroke-width="1" stroke-dasharray="3 3" />
+                    <text x="45" y="${y + 4}" text-anchor="end" class="text-[11px] fill-[#7a7a7a] font-mono font-medium">${vp}</text>
+                `;
+            });
+
+            // Draw saturation curve path
+            const curvePoints = [];
+            for (let t = TEMP_RANGE[0]; t <= TEMP_RANGE[1]; t += 0.5) {
+                const [x, y] = getSvgCoords(t, getEs(t));
+                curvePoints.push(`${curvePoints.length === 0 ? 'M' : 'L'} ${x} ${y}`);
+            }
+            document.getElementById('curve-path').setAttribute('d', curvePoints.join(' '));
+        };
+
+        // --- Realtime Calculations & UI Synchronizer ---
+        const calculateResultsForValues = (t0, e0) => {
+            let t = t0;
+            let td = getTd(e0);
+            let lcl = null;
+            let lclTd = null;
+            const initialTdValue = td;
+
+            for (let h = 0; h <= MAX_HEIGHT; h += 10) {
+                if (t > td) {
+                    t = t0 - (h / 100) * 1.0;
+                    td = initialTdValue;
+                } else {
+                    if (lcl === null) {
+                        lcl = h;
+                        lclTd = td;
+                    }
+                    const hAboveLcl = h - lcl;
+                    t = lclTd - (hAboveLcl / 100) * 0.6;
+                    td = t;
+                }
+            }
+            return { lcl, lclTd, summitT: t };
+        };
+
+        const syncUI = () => {
+            const currentEsValue = getEs(envT);
+            const currentRHValue = Math.min(100, (envE / currentEsValue) * 100);
+            const initialTdValue = getTd(envE);
+
+            // Left Col values
+            document.getElementById('label-t').innerText = `${envT.toFixed(1)} °C`;
+            document.getElementById('input-t').value = envT;
+
+            document.getElementById('label-e').innerText = `${envE.toFixed(2)} hPa`;
+            document.getElementById('input-e').value = envE;
+
+            document.getElementById('label-es').innerText = `${currentEsValue.toFixed(2)} hPa`;
+            document.getElementById('label-rh').innerText = `${currentRHValue.toFixed(1)} %`;
+
+            // Drag Red Red handle point
+            const [redX, redY] = getSvgCoords(envT, envE);
+            document.getElementById('dragging-halo').setAttribute('cx', redX);
+            document.getElementById('dragging-halo').setAttribute('cy', redY);
+            document.getElementById('start-dot').setAttribute('cx', redX);
+            document.getElementById('start-dot').setAttribute('cy', redY);
+            
+            const textEl = document.getElementById('start-dot-text');
+            textEl.setAttribute('x', redX + 12);
+            textEl.setAttribute('y', redY + 4);
+
+            // Pre-calculate LCL targets
+            const calculated = calculateResultsForValues(envT, envE);
+            simulationLcl = calculated.lcl;
+            simulationLclTd = calculated.lclTd;
+            simulationSummitT = calculated.summitT;
+
+            // Render LCL line and markers
+            const lclGroup = document.getElementById('lcl-point-group');
+            if (simulationLclTd !== null) {
+                const [lclX, lclY] = getSvgCoords(simulationLclTd, getEs(simulationLclTd));
+                document.getElementById('lcl-h-line').setAttribute('x2', lclX);
+                document.getElementById('lcl-h-line').setAttribute('y1', lclY);
+                document.getElementById('lcl-h-line').setAttribute('y2', lclY);
+
+                document.getElementById('lcl-v-line').setAttribute('x1', lclX);
+                document.getElementById('lcl-v-line').setAttribute('x2', lclX);
+                document.getElementById('lcl-v-line').setAttribute('y2', lclY);
+
+                document.getElementById('lcl-dot').setAttribute('cx', lclX);
+                document.getElementById('lcl-dot').setAttribute('cy', lclY);
+
+                document.getElementById('lcl-text').setAttribute('x', lclX + 12);
+                document.getElementById('lcl-text').setAttribute('y', lclY - 4);
+                
+                lclGroup.classList.remove('hidden');
+
+                // Mountain LCL Reference
+                const mountainLclGroup = document.getElementById('lcl-mountain-group');
+                const mY = 230 - (simulationLcl / 4000) * 150;
+                document.getElementById('lcl-mountain-line').setAttribute('y1', mY);
+                document.getElementById('lcl-mountain-line').setAttribute('y2', mY);
+                document.getElementById('lcl-mountain-text').setAttribute('y', mY - 5);
+                document.getElementById('lcl-mountain-text').textContent = `凝結高度 (LCL) ${Math.round(simulationLcl)}m`;
+                mountainLclGroup.classList.remove('hidden');
+            } else {
+                lclGroup.classList.add('hidden');
+                document.getElementById('lcl-mountain-group').classList.add('hidden');
+            }
+
+            // Calculations Display Panel
+            document.getElementById('res-lcl').innerText = simulationLcl !== null ? Math.round(simulationLcl) : "--";
+            document.getElementById('res-td').innerText = simulationLclTd !== null ? simulationLclTd.toFixed(1) : "--";
+            document.getElementById('res-tpeak').innerText = simulationSummitT !== null ? simulationSummitT.toFixed(1) : "--";
+
+            // Climber Air Parcel Physics Realtime states sync
+            syncCurrentClimberParcel();
+        };
+
+        // --- Calculate parcel state at current height (currentH) ---
+        const getCurrentParcelState = () => {
+            const initialTdValue = getTd(envE);
+            let t = envT;
+            let td = initialTdValue;
+            let lcl = null;
+            let lclTd = null;
+
+            for (let h = 0; h <= currentH; h += 10) {
+                if (t > td) {
+                    t = envT - (h / 100) * 1.0;
+                    td = initialTdValue;
+                } else {
+                    if (lcl === null) {
+                        lcl = h;
+                        lclTd = td;
+                    }
+                    const hAboveLcl = h - lcl;
+                    t = lclTd - (hAboveLcl / 100) * 0.6;
+                    td = t;
+                }
+            }
+            return { t, td, lcl, lclTd, e: getEs(td) };
+        };
+
+        const syncCurrentClimberParcel = () => {
+            const state = getCurrentParcelState();
+
+            // Snyc panels
+            document.getElementById('parcel-h').innerText = Math.round(currentH);
+            document.getElementById('parcel-temp').innerText = `${state.t.toFixed(1)}°C`;
+            document.getElementById('parcel-dew').innerText = `${state.td.toFixed(1)}°C`;
+
+            // Position on mountain grid
+            const mx = (currentH / 4000) * 450;
+            const my = 230 - (currentH / 4000) * 150;
+            document.getElementById('air-parcel').setAttribute('transform', `translate(${mx}, ${my})`);
+
+            // Saturated Cloud vs Dry sphere toggler
+            const isSaturated = simulationLcl !== null && currentH >= simulationLcl;
+            if (isSaturated) {
+                document.getElementById('parcel-dry').classList.add('hidden');
+                document.getElementById('parcel-cloud').classList.remove('hidden');
+            } else {
+                document.getElementById('parcel-dry').classList.remove('hidden');
+                document.getElementById('parcel-cloud').classList.add('hidden');
+            }
+
+            // Position and pulse dot on Plot
+            const dotGroup = document.getElementById('current-parcel-point-group');
+            if (currentH > 0) {
+                const [cx, cy] = getSvgCoords(state.t, state.e);
+                document.getElementById('parcel-chart-dot').setAttribute('cx', cx);
+                document.getElementById('parcel-chart-dot').setAttribute('cy', cy);
+                
+                document.getElementById('parcel-chart-text').setAttribute('x', cx - 10);
+                document.getElementById('parcel-chart-text').setAttribute('y', cy - 12);
+                document.getElementById('parcel-chart-text').textContent = `上升中 (${Math.round(currentH)}m)`;
+                dotGroup.classList.remove('hidden');
+            } else {
+                dotGroup.classList.add('hidden');
+            }
+        };
+
+        // --- Drag Vector handlers using full Pointer Events model ---
+        let isDragging = false;
+        const setupDragPointerEvents = () => {
+            const svg = document.getElementById('vapor-svg');
+
+            svg.addEventListener('pointerdown', (e) => {
+                const rect = svg.getBoundingClientRect();
+                const clientX = e.clientX - rect.left;
+                const clientY = e.clientY - rect.top;
+
+                // Map to viewBox 550x370
+                const svgX = (clientX / rect.width) * 550;
+                const svgY = (clientY / rect.height) * 370;
+
+                // Threshold Check
+                const [redX, redY] = getSvgCoords(envT, envE);
+                const distanceToDot = Math.hypot(svgX - redX, svgY - redY);
+
+                if (distanceToDot < 35 || (svgX >= 55 && svgX <= 475 && svgY >= 20 && svgY <= 330)) {
+                    svg.setPointerCapture(e.pointerId);
+                    isDragging = true;
+                    document.getElementById('dragging-halo').setAttribute('r', '18');
+                    updateFromCoords(svgX, svgY);
+                }
+            });
+
+            svg.addEventListener('pointermove', (e) => {
+                if (!isDragging) return;
+                const rect = svg.getBoundingClientRect();
+                const clientX = e.clientX - rect.left;
+                const clientY = e.clientY - rect.top;
+
+                const svgX = (clientX / rect.width) * 550;
+                const svgY = (clientY / rect.height) * 370;
+
+                updateFromCoords(svgX, svgY);
+            });
+
+            svg.addEventListener('pointerup', (e) => {
+                if (isDragging) {
+                    svg.releasePointerCapture(e.pointerId);
+                    isDragging = false;
+                    document.getElementById('dragging-halo').setAttribute('r', '12');
+                }
+            });
+        };
+
+        const updateFromCoords = (svgX, svgY) => {
+            const [t, e] = calculateTAndEFromSvgCoords(svgX, svgY);
+            envT = t;
+            envE = e;
+            syncUI();
+        };
+
+        // --- Custom Inputs slider triggers ---
+        window.updateT = (val) => {
+            envT = parseFloat(val);
+            const maxE = getEs(envT);
+            if (envE > maxE) envE = maxE;
+            syncUI();
+        };
+
+        window.updateE = (val) => {
+            const maxE = getEs(envT);
+            envE = Math.min(parseFloat(val), maxE);
+            syncUI();
+        };
+
+        // --- Floating Animation controllers ---
+        window.startAscent = () => {
+            if (isAnimating) return;
+            
+            // Animation active state
+            isAnimating = true;
+            document.getElementById('btn-play').disabled = true;
+            document.getElementById('btn-play').classList.add('opacity-50');
+            document.getElementById('ping-ring').classList.remove('hidden');
+            document.getElementById('ping-ring').classList.add('animate-ping');
+
+            currentH = 0;
+
+            // Generate history row slot
+            const recordId = Date.now();
+            const record = {
+                id: recordId,
+                t0: envT,
+                e0: envE,
+                lcl: null,
+                summitT: null,
+                isFinished: false
+            };
+            history.unshift(record);
+            renderHistoryTable();
+
+            const startTime = performance.now();
+            const stepSize = 18; // Speed of ascent increment
+
+            const frame = () => {
+                if (!isAnimating) return;
+                
+                currentH += stepSize;
+                if (currentH >= MAX_HEIGHT) {
+                    currentH = MAX_HEIGHT;
+                    isAnimating = false;
+                    
+                    // Finalize heights animations
+                    document.getElementById('btn-play').disabled = false;
+                    document.getElementById('btn-play').classList.remove('opacity-50');
+                    document.getElementById('ping-ring').classList.add('hidden');
+                    document.getElementById('ping-ring').classList.remove('animate-ping');
+
+                    // Math update results values
+                    const results = calculateResultsForValues(record.t0, record.e0);
+                    record.lcl = results.lcl;
+                    record.summitT = results.summitT;
+                    record.isFinished = true;
+                    
+                    renderHistoryTable();
+                }
+
+                syncCurrentClimberParcel();
+                if (isAnimating) {
+                    animationFrameId = requestAnimationFrame(frame);
+                }
+            };
+
+            animationFrameId = requestAnimationFrame(frame);
+        };
+
+        window.resetAscent = () => {
+            isAnimating = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            
+            currentH = 0;
+            document.getElementById('btn-play').disabled = false;
+            document.getElementById('btn-play').classList.remove('opacity-50');
+            document.getElementById('ping-ring').classList.add('hidden');
+            document.getElementById('ping-ring').classList.remove('animate-ping');
+
+            // Force recalculations Reset
+            syncUI();
+        };
+
+        // --- Render historical data log rows ---
+        const renderHistoryTable = () => {
+            const tbody = document.getElementById('history-tbody');
+            const clearBtn = document.getElementById('btn-clear');
+
+            if (history.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                      <td colspan="3" class="py-12 text-center text-gray-400 italic">
+                        <div class="flex flex-col items-center justify-center gap-1 w-full text-gray-300">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-40 mb-1">
+                            <path d="m8 3 4 8 5-5 5 15H2L8 3z"/>
+                          </svg>
+                          <span>尚未有爬升模擬紀錄</span>
+                        </div>
+                      </td>
+                    </tr>
+                `;
+                clearBtn.classList.add('hidden');
+                return;
+            }
+
+            clearBtn.classList.remove('hidden');
+            tbody.innerHTML = '';
+
+            history.forEach(record => {
+                const isFinishedBadge = record.isFinished 
+                    ? (record.lcl !== null ? `<span class="font-bold text-[#3498db] font-mono">${Math.round(record.lcl)}m</span>` : '<span class="text-gray-400 italic">未達到</span>')
+                    : `<span class="text-amber-500 animate-pulse font-medium text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 flex items-center justify-center gap-1 w-16 mx-auto">
+                         <svg class="animate-spin h-3.5 w-3.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                           <circle cx="12" cy="12" r="10" stroke-opacity="0.25" />
+                           <path d="M12 2A10 10 0 0 1 22 12" />
+                         </svg> 上升中...
+                       </span>`;
+
+                const summitTCol = record.isFinished 
+                    ? `${record.summitT.toFixed(1)}°C` 
+                    : '<span class="text-gray-400 animate-pulse font-bold font-mono">...</span>';
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50/70 transition-colors">
+                      <td class="py-3 text-gray-700 font-mono font-medium">
+                        ${record.t0.toFixed(1)}°C / ${record.e0.toFixed(1)}hPa
+                      </td>
+                      <td class="py-3 text-center">
+                        ${isFinishedBadge}
+                      </td>
+                      <td class="py-3 text-right font-mono font-bold text-gray-700">
+                        ${summitTCol}
+                      </td>
+                    </tr>
+                `;
+            });
+        };
+
+        window.clearHistory = () => {
+            history = [];
+            renderHistoryTable();
+        };
+
+        // --- Helper: explanation toggle ---
+        window.toggleExplanation = () => {
+            const exp = document.getElementById('explanation-box');
+            exp.classList.toggle('hidden');
+        };
+
+        // --- Entry start state initialization ---
+        window.addEventListener('DOMContentLoaded', () => {
+            setupChartPlot();
+            setupDragPointerEvents();
+            syncUI();
+        });
+    </script>
+</body>
+</html>
