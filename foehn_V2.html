@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>焚風模擬器 (Foehn Wind Simulator) - Standalone</title>
+    <!-- Use Tailwind CSS v3 stable CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fbfcfa;
+            color: #0f172a;
+        }
+        .font-serif { font-family: 'Playfair Display', Georgia, serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: #e2e8f0;
+            height: 6px;
+            border-radius: 9999px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #0044f0;
+            border: 2px solid #ffffff;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            cursor: pointer;
+            border-radius: 9999px;
+            transition: all 0.15s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            background: #1e3a8a;
+        }
+
+        @keyframes windFlow {
+            0% { stroke-dashoffset: 24; }
+            100% { stroke-dashoffset: 0; }
+        }
+        .animate-wind-blue {
+            stroke-dasharray: 8 4;
+            animation: windFlow 1.5s linear infinite;
+        }
+        .animate-wind-red {
+            stroke-dasharray: 8 4;
+            animation: windFlow 1s linear infinite;
+        }
+
+        @keyframes rainFall {
+            0% { transform: translateY(-10px); opacity: 0; }
+            30% { opacity: 0.7; }
+            100% { transform: translateY(40px); opacity: 0; }
+        }
+        .animate-rain {
+            animation: rainFall 1.2s infinite linear;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-4 md:p-8">
+    <div class="max-w-7xl mx-auto w-full bg-white border-2 border-slate-900 shadow-[8px_8px_0px_0px_#0f172a] rounded-2xl overflow-hidden flex flex-col">
+        
+        <!-- Header -->
+        <header class="border-b-2 border-slate-900 p-6 bg-[#0044f0]/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="bg-[#0044f0] text-white px-2.5 py-0.5 rounded text-[10px] font-black tracking-widest uppercase">ES-Lab</span>
+                    <h1 class="text-3xl md:text-4xl font-serif font-black tracking-tight text-slate-900">焚風模擬器</h1>
+                </div>
+                <p class="text-[12px] uppercase font-bold tracking-widest text-slate-500 mt-1.5 font-mono">Foehn Wind Simulator (Standalone Offline-Capable)</p>
+            </div>
+            <div class="flex flex-col text-sm text-slate-500 font-mono text-left sm:text-right">
+                <span>乾絕熱率 (DALR): 1.0°C / 100m</span>
+                <span>濕絕熱率 (WALR): 0.6°C / 100m</span>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <div class="grid grid-cols-1 lg:grid-cols-12">
+            
+            <!-- Left Controls: 5 Columns -->
+            <div class="lg:col-span-5 p-6 border-b-2 lg:border-b-0 lg:border-r-2 border-slate-900 bg-slate-50/50 flex flex-col gap-6">
+                <!-- Parameters Panel -->
+                <div>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-[#0044f0] mb-4 flex items-center gap-2">
+                        <span>⚙️</span> 參數控制器 Parameters
+                    </h2>
+                    <div class="space-y-5 bg-white p-5 border-2 border-slate-950 rounded-xl shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+                        <!-- T0 -->
+                        <div>
+                            <div class="flex justify-between text-xs font-bold uppercase mb-1.5 text-slate-600">
+                                <span>起點海平面溫度 (T₀)</span>
+                                <span class="font-mono text-slate-900 font-black"><span id="val-t0">30</span>°C</span>
+                            </div>
+                            <input id="slider-t0" type="range" min="0" max="50" value="30" class="w-full">
+                        </div>
+                        
+                        <!-- Td0 -->
+                        <div>
+                            <div class="flex justify-between text-xs font-bold uppercase mb-1.5 text-slate-600">
+                                <span>起點海平面露點 (Td₀)</span>
+                                <span class="font-mono text-slate-900 font-black"><span id="val-td0">20</span>°C</span>
+                            </div>
+                            <input id="slider-td0" type="range" min="0" max="30" value="20" class="w-full">
+                        </div>
+
+                        <!-- Height H -->
+                        <div>
+                            <div class="flex justify-between text-xs font-bold uppercase mb-1.5 text-slate-600">
+                                <span>山巔海拔高度 (H)</span>
+                                <span class="font-mono text-slate-900 font-black"><span id="val-h">2500</span> m</span>
+                            </div>
+                            <input id="slider-h" type="range" min="500" max="4000" step="100" value="2500" class="w-full">
+                        </div>
+
+                        <!-- Lapse rate toggle -->
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 leading-tight">未飽和時露點隨海拔遞減 <br>(0.2°C/100m)</span>
+                            <button id="btn-toggle-td" class="px-3 py-1 text-xs font-black uppercase border-2 border-slate-950 bg-slate-100 hover:bg-slate-200 rounded transition-all">關閉 OFF</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Presets selection -->
+                <div>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-[#0044f0] mb-3 flex items-center gap-2">
+                        <span>💡</span> 經典氣象場景 Presets
+                    </h2>
+                    <div id="presets-container" class="space-y-2">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Timeline Player -->
+                <div class="bg-slate-900 text-white p-5 border-2 border-slate-950 rounded-xl shadow-[4px_4px_0px_0px_#0044f0] mt-auto">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs uppercase font-black tracking-widest text-slate-400">空氣塊路徑歷程</span>
+                        <span class="bg-[#0044f0] text-white px-2 py-0.5 rounded text-[10px] font-mono"><span id="val-progress">0</span>%</span>
+                    </div>
+                    <div class="flex gap-4 items-center">
+                        <button id="btn-play" class="bg-[#0044f0] border-2 border-white hover:bg-blue-600 px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-widest flex items-center gap-1.5 transition-all">
+                            ▶ PLAY
+                        </button>
+                        <button id="btn-reset" class="bg-transparent border-2 border-slate-700 hover:border-white px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all">
+                            重置
+                        </button>
+                        <input id="slider-progress" type="range" min="0" max="100" value="0" class="flex-grow">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Workspace: 7 Columns -->
+            <div class="lg:col-span-7 flex flex-col">
+                <!-- SVG Simulation Canvas -->
+                <div id="canvas-container" class="relative overflow-hidden cursor-crosshair bg-gradient-to-b from-blue-50/40 via-white to-slate-50 border-b-2 border-slate-900 select-none" style="height: 340px;">
+                    <!-- Static grid backdrop -->
+                    <div class="absolute inset-0 opacity-[0.03]" style="background-image: linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px); background-size: 30px 30px;"></div>
+                    
+                    <svg id="svg-element" class="w-full h-full" viewBox="0 0 800 350" preserveAspectRatio="none">
+                        <!-- Dynamic Gradients and Visual Elements will be loaded here -->
+                        <defs>
+                            <linearGradient id="windwardGrad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#0044f0" stop-opacity="0.08"/>
+                                <stop offset="100%" stop-color="#0044f0" stop-opacity="0.02"/>
+                            </linearGradient>
+                            <linearGradient id="leewardGrad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#ea580c" stop-opacity="0.02"/>
+                                <stop offset="100%" stop-color="#ea580c" stop-opacity="0.12"/>
+                            </linearGradient>
+                        </defs>
+                        
+                        <!-- Side zones backgrounds -->
+                        <rect x="0" y="0" width="400" height="350" fill="url(#windwardGrad)" />
+                        <rect x="400" y="0" width="400" height="350" fill="url(#leewardGrad)" />
+
+                        <!-- Flow lines -->
+                        <path id="windward-flow" d="M 50 260 L 120 280 L 400 80" fill="none" stroke="#3b82f6" stroke-width="2" class="animate-wind-blue opacity-30" />
+                        <path id="leeward-flow" d="M 400 80 L 680 280 L 750 260" fill="none" stroke="#ef4444" stroke-width="2" class="animate-wind-red opacity-30" />
+
+                        <!-- Dynamic Clouds -->
+                        <g id="cloud-group">
+                            <!-- Injected by JS -->
+                        </g>
+
+                        <!-- Ground Mountain Terrain -->
+                        <path id="valley-path" d="M 0 280 L 120 280 L 400 80 L 680 280 L 800 280 L 800 350 L 0 350 Z" fill="#f1f5f9" stroke="#0f172a" stroke-width="2" />
+                        <path d="M 0 280 L 120 280 L 400 80 L 680 280 L 800 280" fill="none" stroke="#0f172a" stroke-width="3" />
+
+                        <!-- Dynamic LCL marker line -->
+                        <line id="lcl-line" x1="0" y1="280" x2="800" y2="280" stroke="#0f172a" stroke-dasharray="4,4" opacity="0.12" stroke-width="1.5" />
+                        
+                        <!-- Condensation Level Tag -->
+                        <g id="lcl-tag">
+                            <rect x="8" y="235" width="130" height="18" fill="#ffffff" stroke="#0f172a" stroke-width="1" rx="3" opacity="0.8"/>
+                            <text id="lbl-lcl-height" x="14" y="248" font-family="monospace" font-size="10" font-weight="bold" fill="#475569">LCL: 1000m</text>
+                        </g>
+
+                        <!-- Dynamic Parcel indicator bubble -->
+                        <g id="parcel-element" style="transition: transform 0.05s ease-out;">
+                            <circle id="parcel-glow" r="32" fill="#0044f0" fill-opacity="0.1" />
+                            <circle id="parcel-circle" r="21" fill="#ffffff" stroke="#0f172a" stroke-width="2" class="shadow-xl" />
+                            <circle id="parcel-indicator" r="14" fill="#0044f0" fill-opacity="0.8" />
+                            <text id="parcel-text" y="4" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="black" fill="#ffffff">30</text>
+                        </g>
+                    </svg>
+
+                    <!-- UI Overlay labels -->
+                    <div class="absolute top-4 left-6 text-[11px] font-black tracking-widest text-[#0044f0] bg-white/80 px-2 py-0.5 border border-[#0044f0]/20 rounded font-mono">
+                        ◀ 迎風面 WINDWARD
+                    </div>
+                    <div class="absolute top-4 right-6 text-[11px] font-black tracking-widest text-orange-600 bg-white/80 px-2 py-0.5 border border-orange-600/20 rounded font-mono">
+                        背風面 LEEWARD ▶
+                    </div>
+                </div>
+
+                <!-- Live Metrics Display Panel -->
+                <div class="p-6 bg-white border-b-2 border-slate-900 grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div class="border-r border-slate-100">
+                        <span class="text-[10px] font-black tracking-widest text-slate-400 uppercase font-mono block mb-1">高度 Altitude</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="metric-height" class="text-3xl font-mono font-black text-slate-900">0</span>
+                            <span class="text-sm font-serif italic text-slate-400">m</span>
+                        </div>
+                    </div>
+                    <div class="border-r border-slate-100">
+                        <span class="text-[10px] font-black tracking-widest text-slate-400 uppercase font-mono block mb-1">溫度 Temperature</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="metric-temp" class="text-3xl font-mono font-black text-slate-900">30.0</span>
+                            <span class="text-sm font-serif italic text-slate-400">°C</span>
+                        </div>
+                    </div>
+                    <div class="border-r border-slate-100">
+                        <span class="text-[10px] font-black tracking-widest text-slate-400 uppercase font-mono block mb-1">露點 Dew Point</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="metric-dewpoint" class="text-3xl font-mono font-black text-slate-900">20.0</span>
+                            <span class="text-sm font-serif italic text-slate-400">°C</span>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-black tracking-widest text-slate-400 uppercase font-mono block mb-1">相對濕度 Humidity</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="metric-rh" class="text-3xl font-mono font-black text-slate-900">55</span>
+                            <span class="text-sm font-serif italic text-slate-400">%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparison Table -->
+                <div class="p-6">
+                    <h3 class="text-xs uppercase font-black tracking-widest text-slate-500 mb-3 font-mono">前後對比分析 Climate Comparison</h3>
+                    <div class="border-2 border-slate-950 rounded-xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
+                                <tr>
+                                    <th class="p-3">里程碑 Stage</th>
+                                    <th class="p-3">溫度 Temp</th>
+                                    <th class="p-3">露點 Dew Pt</th>
+                                    <th class="p-3">濕度 RH</th>
+                                    <th class="p-3">大氣狀態 State</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 font-medium">
+                                <tr class="bg-white">
+                                    <td class="p-3 font-bold text-[#0044f0]">① 迎風起點 Sea level (W)</td>
+                                    <td class="p-3 font-mono" id="comp-w-temp">30.0°C</td>
+                                    <td class="p-3 font-mono" id="comp-w-dew">20.0°C</td>
+                                    <td class="p-3 font-mono" id="comp-w-rh">55%</td>
+                                    <td class="p-3"><span class="bg-blue-50 text-[#0044f0] font-black px-2 py-0.5 rounded text-[10px]">未飽和</span></td>
+                                </tr>
+                                <tr class="bg-slate-50/50">
+                                    <td class="p-3 font-bold text-slate-800">② 高山頂峰 Mountain Peak</td>
+                                    <td class="p-3 font-mono" id="comp-p-temp">15.0°C</td>
+                                    <td class="p-3 font-mono" id="comp-p-dew">15.0°C</td>
+                                    <td class="p-3 font-mono" id="comp-p-rh">100%</td>
+                                    <td class="p-3" id="comp-p-state"><span class="bg-emerald-50 text-emerald-600 font-bold px-2 py-0.5 rounded text-[10px]">已飽和 🌧️</span></td>
+                                </tr>
+                                <tr class="bg-white">
+                                    <td class="p-3 font-bold text-orange-600">③ 背風終點 Sea level (L)</td>
+                                    <td class="p-3 font-mono font-black text-rose-600" id="comp-l-temp">34.0°C</td>
+                                    <td class="p-3 font-mono" id="comp-l-dew">14.0°C</td>
+                                    <td class="p-3 font-mono text-amber-600" id="comp-l-rh">30%</td>
+                                    <td class="p-3"><span class="bg-orange-50 text-orange-600 font-black px-2 py-0.5 rounded text-[10px]">乾熱風 Foehn</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Thermodynamic Gain Alert Card -->
+                    <div id="gain-alert-card" class="mt-4 p-4 border-2 border-slate-900 bg-orange-50 text-orange-950 rounded-xl flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">🔥</span>
+                            <div>
+                                <h4 class="font-bold text-sm">焚風熱力學效應分析</h4>
+                                <p class="text-xs text-orange-800 font-medium">空氣跨越山脈後，海平面淨升溫 <span id="alert-temp-gain" class="font-bold">4.0</span>°C，相對濕度崩跌 <span id="alert-rh-drop" class="font-bold">25</span>%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Explanatory Footer -->
+        <footer class="bg-slate-50 border-t border-slate-200 p-6 text-xs leading-relaxed text-slate-500">
+            <h3 class="font-black uppercase tracking-widest text-slate-700 mb-3">Thermodynamics Physics Handbook · 絕熱物理手冊</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <h4 class="font-black text-slate-900 mb-1">01. 乾絕熱不飽和冷卻</h4>
+                    <p>未達飽和（氣溫與露點不相等）的上升空氣，體積隨氣壓降低膨脹而快速降溫，溫度每上升 100 公尺下降 <b>1.0°C</b>。其露點溫度大約每 100 公尺僅微幅下降 0.2°C 或維持常數。</p>
+                </div>
+                <div>
+                    <h4 class="font-black text-slate-900 mb-1">02. 凝結高度與濕絕熱</h4>
+                    <p>當空氣上升冷卻至與露點溫度一致時，即抵達凝結高度 (LCL)，此時水氣飽和形成<b>雲霧與降雨</b>。由於水凝結釋放「潛熱」，上升冷卻速率變慢，變為每 100 公尺僅降溫 <b>0.6°C</b>。</p>
+                </div>
+                <div>
+                    <h4 class="font-black text-slate-900 mb-1">03. 背風沈降乾絕熱升溫</h4>
+                    <p>空氣翻越山頭向背風面下沉時，水分已釋放脫乾。下沉空氣受氣壓壓縮體積收縮，百分之百以乾絕熱率 <b>(1.0°C / 100m)</b> 急遽升溫。因此返抵海平面時，溫度遠高於迎風面，形成乾熱焚風。</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // --- Thermodynamic constants & state variables ---
+        let initialTemp = 30;
+        let initialDewPoint = 20;
+        let mountainHeight = 2500;
+        let dewPointChanges = false;
+        let progress = 0; // 0 to 100
+
+        let isPlaying = false;
+        let playInterval = null;
+
+        const presets = [
+            {
+                id: "taitung",
+                name: "經典台東卑南焚風",
+                temp: 30,
+                dewPoint: 22,
+                height: 2500,
+                dewPointChanges: false,
+                desc: "台灣東部典型地形效應。強烈的迎風面飽和降雨在背風面引發破 36°C 乾熱風災。"
+            },
+            {
+                id: "dry",
+                name: "乾燥極限（無雲無焚風）",
+                temp: 20,
+                dewPoint: 2,
+                height: 1500,
+                dewPointChanges: false,
+                desc: "空氣過於乾燥，攀越山脈時皆未達凝結高度（LCL）。無水氣析出，升降均以乾絕熱率温變。"
+            },
+            {
+                id: "tropical",
+                name: "熱帶暴雨極端發熱",
+                temp: 32,
+                dewPoint: 31,
+                height: 3000,
+                dewPointChanges: true,
+                desc: "超淺露點差與極高雨林濕度。幾乎整座山都在下暴雨，水氣大量脫去，背風面高溫狂飆。"
+            }
+        ];
+
+        // --- DOM Elements selectors ---
+        const sT0 = document.getElementById("slider-t0");
+        const sTd0 = document.getElementById("slider-td0");
+        const sH = document.getElementById("slider-h");
+        const sProg = document.getElementById("slider-progress");
+        const btnToggleTd = document.getElementById("btn-toggle-td");
+        const presetsContainer = document.getElementById("presets-container");
+
+        const valT0 = document.getElementById("val-t0");
+        const valTd0 = document.getElementById("val-td0");
+        const valH = document.getElementById("val-h");
+        const valProg = document.getElementById("val-progress");
+
+        const mHeight = document.getElementById("metric-height");
+        const mTemp = document.getElementById("metric-temp");
+        const mDewPoint = document.getElementById("metric-dewpoint");
+        const mRh = document.getElementById("metric-rh");
+
+        const btnPlay = document.getElementById("btn-play");
+        const btnReset = document.getElementById("btn-reset");
+
+        const parcelElement = document.getElementById("parcel-element");
+        const parcelText = document.getElementById("parcel-text");
+        const parcelIndicator = document.getElementById("parcel-indicator");
+        const parcelGlow = document.getElementById("parcel-glow");
+        const lclLine = document.getElementById("lcl-line");
+        const lblLclHeight = document.getElementById("lbl-lcl-height");
+        const cloudGroup = document.getElementById("cloud-group");
+
+        const compWTemp = document.getElementById("comp-w-temp");
+        const compWDew = document.getElementById("comp-w-dew");
+        const compWRh = document.getElementById("comp-w-rh");
+
+        const compPTemp = document.getElementById("comp-p-temp");
+        const compPDew = document.getElementById("comp-p-dew");
+        const compPRh = document.getElementById("comp-p-rh");
+        const compPState = document.getElementById("comp-p-state");
+
+        const compLTemp = document.getElementById("comp-l-temp");
+        const compLDew = document.getElementById("comp-l-dew");
+        const compLRh = document.getElementById("comp-l-rh");
+
+        const alertTempGain = document.getElementById("alert-temp-gain");
+        const alertRhDrop = document.getElementById("alert-rh-drop");
+        const alertCard = document.getElementById("gain-alert-card");
+
+        const canvasContainer = document.getElementById("canvas-container");
+
+        // --- Math formulas ---
+        function calculateRH(temp, dewPoint) {
+            if (dewPoint >= temp) return 100;
+            const es = 6.11 * Math.pow(10, (7.5 * temp) / (237.3 + temp));
+            const e = 6.11 * Math.pow(10, (7.5 * dewPoint) / (237.3 + dewPoint));
+            return Math.min(100, Math.max(0, Math.round((e / es) * 100)));
+        }
+
+        function getStatsAtX(xVal) {
+            let h = 0;
+            let isLeeward = false;
+
+            if (xVal <= 15) {
+                h = 0;
+            } else if (xVal <= 50) {
+                h = ((xVal - 15) / 35) * mountainHeight;
+            } else if (xVal <= 85) {
+                h = (1 - ((xVal - 50) / 35)) * mountainHeight;
+                isLeeward = true;
+            } else {
+                h = 0;
+                isLeeward = true;
+            }
+
+            const r_td = dewPointChanges ? 0.2 : 0;
+            const lapse_diff = 1.0 - r_td;
+            const lcl = lapse_diff > 0 ? ((initialTemp - initialDewPoint) / lapse_diff) * 100 : 0;
+
+            let temp = initialTemp;
+            let dewPoint = initialDewPoint;
+            let isSaturated = false;
+
+            if (!isLeeward) {
+                if (h <= lcl) {
+                    temp = initialTemp - (h / 100) * 1.0;
+                    dewPoint = initialDewPoint - (h / 100) * r_td;
+                    isSaturated = h > 0 && Math.abs(temp - dewPoint) < 0.1;
+                } else {
+                    const tempAtLcl = initialTemp - (lcl / 100) * 1.0;
+                    temp = tempAtLcl - ((h - lcl) / 100) * 0.6;
+                    dewPoint = temp;
+                    isSaturated = true;
+                }
+            } else {
+                let peakTemp = initialTemp;
+                let peakDewPoint = initialDewPoint;
+                if (mountainHeight <= lcl) {
+                    peakTemp = initialTemp - (mountainHeight / 100) * 1.0;
+                    peakDewPoint = initialDewPoint - (mountainHeight / 100) * r_td;
+                } else {
+                    const tempAtLcl = initialTemp - (lcl / 100) * 1.0;
+                    peakTemp = tempAtLcl - ((mountainHeight - lcl) / 100) * 0.6;
+                    peakDewPoint = peakTemp;
+                }
+
+                const diffH = mountainHeight - h;
+                temp = peakTemp + (diffH / 100) * 1.0;
+                dewPoint = peakDewPoint + (diffH / 100) * r_td;
+
+                if (dewPoint > temp) dewPoint = temp;
+                isSaturated = false;
+            }
+
+            return {
+                height: Math.round(h),
+                temp: Number(temp.toFixed(1)),
+                dewPoint: Number(dewPoint.toFixed(1)),
+                rh: calculateRH(temp, dewPoint),
+                isSaturated,
+                isLeeward,
+                lcl: Math.round(lcl)
+            };
+        }
+
+        // --- Core Render functions ---
+        function updateUI() {
+            // Update parameter slider values
+            valT0.textContent = initialTemp;
+            valTd0.textContent = initialDewPoint;
+            valH.textContent = mountainHeight;
+            valProg.textContent = Math.round(progress);
+
+            // Constraint DewPoint to never exceed T0
+            sTd0.max = initialTemp;
+            if (initialDewPoint > initialTemp) {
+                initialDewPoint = initialTemp;
+                sTd0.value = initialTemp;
+                valTd0.textContent = initialTemp;
+            }
+
+            // Sync Slider elements values
+            sT0.value = initialTemp;
+            sTd0.value = initialDewPoint;
+            sH.value = mountainHeight;
+            sProg.value = Math.round(progress);
+
+            // Calculate current stats
+            const current = getStatsAtX(progress);
+
+            // Set main metric numbers
+            mHeight.textContent = current.height;
+            mTemp.textContent = current.temp.toFixed(1);
+            mDewPoint.textContent = current.dewPoint.toFixed(1);
+            mRh.textContent = current.rh;
+
+            // Update parcel visual coordinates
+            const visualX = (progress / 100) * 800;
+            // 200px equivalent to mountainHeight, Peak at y=80, Base at y=280
+            const ratio = current.height / mountainHeight;
+            const visualY = 280 - ratio * 200;
+
+            parcelElement.setAttribute("transform", "translate(" + visualX + ", " + visualY + ")");
+            parcelText.textContent = Math.round(current.temp) + "°";
+
+            // Bubble glowing color based on parcel conditions
+            if (current.isSaturated) {
+                parcelIndicator.setAttribute("fill", "#0284c7");
+                parcelGlow.setAttribute("fill", "#0284c7");
+                parcelText.textContent = "🌧️";
+            } else if (current.isLeeward) {
+                parcelIndicator.setAttribute("fill", "#ea580c");
+                parcelGlow.setAttribute("fill", "#ea580c");
+            } else {
+                parcelIndicator.setAttribute("fill", "#0044f0");
+                parcelGlow.setAttribute("fill", "#0044f0");
+            }
+
+            // Draw LCL dashed guide line
+            const lcl = current.lcl;
+            if (lcl < mountainHeight && lcl > 0) {
+                const lclRatio = lcl / mountainHeight;
+                const lclY = 280 - lclRatio * 200;
+                lclLine.setAttribute("y1", lclY);
+                lclLine.setAttribute("y2", lclY);
+                lclLine.setAttribute("opacity", "0.22");
+                lblLclHeight.textContent = "LCL 凝結高度: " + lcl + "m";
+                document.getElementById("lcl-tag").setAttribute("transform", "translate(10, " + (lclY - 10) + ")");
+                document.getElementById("lcl-tag").style.display = "block";
+            } else {
+                lclLine.setAttribute("opacity", "0");
+                document.getElementById("lcl-tag").style.display = "none";
+            }
+
+            // Render dynamic windward clouds
+            if (lcl < mountainHeight) {
+                const lclPct = 15 + (lcl / mountainHeight) * 35;
+                const cloudStartX = (lclPct / 100) * 800;
+                const cloudStartY = 280 - (lcl / mountainHeight) * 200;
+                
+                let cloudHTML = "";
+                // Rain droplets
+                if (progress >= lclPct && progress <= 50) {
+                    for (let d = 0; d < 12; d++) {
+                        const rX = cloudStartX + Math.random() * (400 - cloudStartX);
+                        const rY = cloudStartY + Math.random() * (80 - cloudStartY) + 20;
+                        cloudHTML += '<line x1="' + rX + '" y1="' + rY + '" x2="' + (rX - 2) + '" y2="' + (rY + 15) + '" stroke="#0284c7" stroke-width="1.5" class="animate-rain" style="animation-delay: ' + (d * 0.1) + 's" opacity="0.6"/>';
+                    }
+                }
+
+                // Cloud puffs along windward slope
+                cloudHTML += '<path d="M ' + cloudStartX + ' ' + (cloudStartY - 5) + ' Q ' + ((cloudStartX + 400) / 2) + ' ' + (cloudStartY - 30) + ' 400 70 L 400 80 Q ' + ((cloudStartX + 400) / 2) + ' ' + (cloudStartY + 10) + ' ' + cloudStartX + ' ' + cloudStartY + ' Z" fill="#e2e8f0" fill-opacity="0.7" stroke="#94a3b8" stroke-width="1.5" />';
+                cloudHTML += '<circle cx="' + cloudStartX + '" cy="' + (cloudStartY - 5) + '" r="15" fill="#e2e8f0" fill-opacity="0.8" />';
+                cloudHTML += '<circle cx="300" cy="140" r="30" fill="#f1f5f9" fill-opacity="0.8" />';
+                cloudHTML += '<circle cx="340" cy="110" r="28" fill="#f1f5f9" fill-opacity="0.8" />';
+                cloudHTML += '<circle cx="380" cy="85" r="25" fill="#f1f5f9" fill-opacity="0.8" />';
+                
+                cloudGroup.innerHTML = cloudHTML;
+            } else {
+                cloudGroup.innerHTML = "";
+            }
+
+            // Milestones stats comparison table updates
+            const stW = getStatsAtX(0);
+            const stP = getStatsAtX(50);
+            const stL = getStatsAtX(100);
+
+            compWTemp.textContent = stW.temp.toFixed(1) + "°C";
+            compWDew.textContent = stW.dewPoint.toFixed(1) + "°C";
+            compWRh.textContent = stW.rh + "%";
+
+            compPTemp.textContent = stP.temp.toFixed(1) + "°C";
+            compPDew.textContent = stP.dewPoint.toFixed(1) + "°C";
+            compPRh.textContent = stP.rh + "%";
+            if (stP.isSaturated) {
+                compPState.innerHTML = '<span class="bg-blue-100 text-[#0044f0] font-black px-2 py-0.5 rounded text-[10px]">已飽和 🌧️</span>';
+            } else {
+                compPState.innerHTML = '<span class="bg-gray-100 text-slate-500 font-bold px-2 py-0.5 rounded text-[10px]">未飽和</span>';
+            }
+
+            compLTemp.textContent = stL.temp.toFixed(1) + "°C";
+            compLDew.textContent = stL.dewPoint.toFixed(1) + "°C";
+            compLRh.textContent = stL.rh + "%";
+
+            // Net values
+            const netGain = (stL.temp - stW.temp).toFixed(1);
+            const netDrop = stW.rh - stL.rh;
+            alertTempGain.textContent = netGain;
+            alertRhDrop.textContent = netDrop;
+
+            if (Number(netGain) <= 0.1) {
+                alertCard.className = "mt-4 p-4 border-2 border-slate-900 bg-slate-50 text-slate-800 rounded-xl flex items-center justify-between gap-4";
+                alertCard.innerHTML = '<div class="flex items-center gap-3"><span class="text-2xl">☁️</span><div><h4 class="font-bold text-sm">無焚風增溫效應</h4><p class="text-xs text-slate-500 font-medium font-mono">在此大氣配置下，山脈兩端無顯著溫溼度差異（迎風面無飽和析水現象）。</p></div></div>';
+            } else {
+                alertCard.className = "mt-4 p-4 border-2 border-slate-900 bg-orange-50 text-orange-950 rounded-xl flex items-center justify-between gap-4";
+                alertCard.innerHTML = '<div class="flex items-center gap-3"><span class="text-2xl">🔥</span><div><h4 class="font-bold text-sm">焚風熱力學效應分析</h4><p class="text-xs text-orange-850 font-medium">空氣翻越山頭向背風面沉降後，起點與終點絕熱過程不對稱，海平面<b>淨溫升 +' + netGain + '°C</b>，相對濕度<b>暴跌 ' + netDrop + '%</b>！</p></div></div>';
+            }
+        }
+
+        // --- Interaction Handlers ---
+        function handleInteraction(clientX) {
+            const rect = canvasContainer.getBoundingClientRect();
+            const relativeX = clientX - rect.left;
+            progress = Math.min(100, Math.max(0, (relativeX / rect.width) * 100));
+            updateUI();
+        }
+
+        canvasContainer.addEventListener("mousedown", (e) => {
+            handleInteraction(e.clientX);
+            
+            function onMouseMove(moveEvent) {
+                handleInteraction(moveEvent.clientX);
+            }
+            
+            function onMouseUp() {
+                window.removeEventListener("mousemove", onMouseMove);
+                window.removeEventListener("mouseup", onMouseUp);
+            }
+            
+            window.addEventListener("mousemove", onMouseMove);
+            window.addEventListener("mouseup", onMouseUp);
+        });
+
+        canvasContainer.addEventListener("touchstart", (e) => {
+            handleInteraction(e.touches[0].clientX);
+            
+            function onTouchMove(moveEvent) {
+                handleInteraction(moveEvent.touches[0].clientX);
+            }
+            
+            function onTouchEnd() {
+                window.removeEventListener("touchmove", onTouchMove);
+                window.removeEventListener("touchend", onTouchEnd);
+            }
+            
+            window.addEventListener("touchmove", onTouchMove, { passive: true });
+            window.addEventListener("touchend", onTouchEnd);
+        });
+
+        // Sliders Listeners
+        sT0.addEventListener("input", (e) => {
+            initialTemp = Number(e.target.value);
+            updateUI();
+        });
+
+        sTd0.addEventListener("input", (e) => {
+            initialDewPoint = Number(e.target.value);
+            updateUI();
+        });
+
+        sH.addEventListener("input", (e) => {
+            mountainHeight = Number(e.target.value);
+            updateUI();
+        });
+
+        sProg.addEventListener("input", (e) => {
+            progress = Number(e.target.value);
+            updateUI();
+        });
+
+        // Toggle Lcl Rate
+        btnToggleTd.addEventListener("click", () => {
+            dewPointChanges = !dewPointChanges;
+            btnToggleTd.textContent = dewPointChanges ? "開啟 ON (0.2°C)" : "關閉 OFF (0.0°C)";
+            btnToggleTd.className = dewPointChanges 
+                ? "px-3 py-1 text-xs font-black uppercase border-2 border-slate-950 bg-slate-900 text-white rounded transition-all"
+                : "px-3 py-1 text-xs font-black uppercase border-2 border-slate-950 bg-slate-100 text-slate-800 rounded transition-all";
+            updateUI();
+        });
+
+        // Animate progression player
+        btnPlay.addEventListener("click", () => {
+            if (isPlaying) {
+                clearInterval(playInterval);
+                btnPlay.textContent = "▶ PLAY";
+                isPlaying = false;
+            } else {
+                if (progress >= 100) progress = 0;
+                btnPlay.textContent = "❚❚ PAUSE";
+                isPlaying = true;
+                playInterval = setInterval(() => {
+                    progress += 0.5;
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(playInterval);
+                        btnPlay.textContent = "▶ PLAY";
+                        isPlaying = false;
+                    }
+                    updateUI();
+                }, 20);
+            }
+        });
+
+        btnReset.addEventListener("click", () => {
+            progress = 0;
+            if (isPlaying) {
+                clearInterval(playInterval);
+                btnPlay.textContent = "▶ PLAY";
+                isPlaying = false;
+            }
+            updateUI();
+        });
+
+        // Presets injection
+        presets.forEach((pres) => {
+            const btn = document.createElement("button");
+            btn.className = "w-full text-left p-3 border-2 border-slate-300 hover:border-slate-900 hover:bg-slate-50 rounded-lg transition-all flex flex-col gap-1";
+            btn.innerHTML = '<span class="font-black text-xs font-serif text-slate-900">' + pres.name + '</span><span class="text-[10px] text-slate-500 font-mono">T₀=' + pres.temp + '°C, Td₀=' + pres.dewPoint + '°C, H=' + pres.height + 'm</span><p class="text-[11px] leading-relaxed text-slate-400 mt-1">' + pres.desc + '</p>';
+            btn.onclick = () => {
+                initialTemp = pres.temp;
+                initialDewPoint = pres.dewPoint;
+                mountainHeight = pres.height;
+                dewPointChanges = pres.dewPointChanges;
+                progress = 0;
+                
+                // update toggle button
+                btnToggleTd.textContent = dewPointChanges ? "開啟 ON (0.2°C)" : "關閉 OFF (0.0°C)";
+                btnToggleTd.className = dewPointChanges 
+                    ? "px-3 py-1 text-xs font-black uppercase border-2 border-slate-950 bg-slate-900 text-white rounded transition-all"
+                    : "px-3 py-1 text-xs font-black uppercase border-2 border-slate-950 bg-slate-100 text-slate-800 rounded transition-all";
+
+                if (isPlaying) {
+                    clearInterval(playInterval);
+                    btnPlay.textContent = "▶ PLAY";
+                    isPlaying = false;
+                }
+                updateUI();
+            };
+            presetsContainer.appendChild(btn);
+        });
+
+        // Init load
+        updateUI();
+    </script>
+</body>
+</html>
