@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>焚風模擬器 (Foehn Wind Simulator) - Standalone</title>
+    <!-- 引入穩定的 Tailwind CSS 視覺框架 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&display=swap');
+        
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #F0EFEC;
+            color: #0f172a;
+        }
+        .font-serif { font-family: 'Playfair Display', Georgia, serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* 客製化簡約滑桿 styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: #e2e8f0;
+            height: 6px;
+            border-radius: 9999px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #0044f0;
+            border: 2px solid #ffffff;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            cursor: pointer;
+            border-radius: 9999px;
+            transition: all 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            background: #1e3a8a;
+        }
+
+        /* 迎風伴流與背風熱浪線條動畫 */
+        @keyframes windFlow {
+            0% { stroke-dashoffset: 24; }
+            100% { stroke-dashoffset: 0; }
+        }
+        .animate-wind-blue {
+            stroke-dasharray: 8 4;
+            animation: windFlow 1.5s linear infinite;
+        }
+        .animate-wind-red {
+            stroke-dasharray: 8 4;
+            animation: windFlow 1s linear infinite;
+        }
+
+        /* 雨水降落物理特效 */
+        @keyframes rainFall {
+            0% { transform: translateY(-10px); opacity: 0; }
+            30% { opacity: 0.7; }
+            100% { transform: translateY(40px); opacity: 0; }
+        }
+        .animate-rain {
+            animation: rainFall 1.2s infinite linear;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-4 md:p-8">
+    <div class="max-w-7xl mx-auto w-full bg-white border-2 border-slate-950 shadow-[8px_8px_0px_0px_#0f172a] rounded-2xl overflow-hidden flex flex-col">
+        
+        <!-- 簡潔頂部 -->
+        <header class="border-b-2 border-slate-950 p-6 bg-[#0044f0]/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="bg-[#0044f0] text-white px-2.5 py-0.5 rounded text-[10px] font-black tracking-widest uppercase">ES-Lab</span>
+                    <h1 class="text-3xl font-serif font-black tracking-tight text-slate-900">焚風模擬器</h1>
+                </div>
+                <p class="text-[11px] uppercase font-bold tracking-widest text-slate-500 mt-1 font-mono">Foehn Wind Simulator (Simplified Standalone App)</p>
+            </div>
+            <div class="flex flex-col text-xs text-slate-500 font-mono text-left sm:text-right">
+                <span>乾絕熱率 (DALR): 1.0°C / 100m</span>
+                <span>濕絕熱率 (WALR): 0.6°C / 100m</span>
+            </div>
+        </header>
+
+        <!-- 核心工作格 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12">
+            
+            <!-- 區域一：參數控制器 (5 欄寬) -->
+            <div class="lg:col-span-5 p-6 border-b-2 lg:border-b-0 lg:border-r-2 border-slate-950 bg-slate-50/50 flex flex-col gap-6">
+                <div>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-[#0044f0] mb-4 flex items-center gap-2">
+                        <span>⚙️</span> 參數控制器 Parameters
+                    </h2>
+                    <div class="space-y-5 bg-white p-5 border-2 border-slate-950 rounded-xl shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+                        <!-- T0 -->
+                        <div>
+                            <div class="flex justify-between text-xs font-bold uppercase mb-1.5 text-slate-600">
+                                <span>起點海平面溫度 (T₀)</span>
+                                <span class="font-mono text-slate-900 font-black"><span id="val-t0">30</span>°C</span>
+                            </div>
+                            <input id="slider-t0" type="range" min="10" max="45" value="30" class="w-full">
+                        </div>
+                        
+                        <!-- Td0 -->
+                        <div>
+                            <div class="flex justify-between text-xs font-bold uppercase mb-1.5 text-slate-600">
+                                <span>起點海平面露點 (Td₀)</span>
+                                <span class="font-mono text-slate-900 font-black"><span id="val-td0">20</span>°C</span>
+                            </div>
+                            <input id="slider-td0" type="range" min="0" max="30" value="20" class="w-full">
+                        </div>
+
+                        <!-- Height H -->
+                        <div>
+                            <div class="flex justify-between text-xs font-bold uppercase mb-1.5 text-slate-600">
+                                <span>山巔海拔高度 (H)</span>
+                                <span class="font-mono text-slate-900 font-black"><span id="val-h">2500</span> m</span>
+                            </div>
+                            <input id="slider-h" type="range" min="500" max="4000" step="100" value="2500" class="w-full">
+                        </div>
+
+                        <!-- Lapse rate toggle -->
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 leading-tight">未飽和時露點隨海拔遞減 <br>(0.2°C/100m)</span>
+                            <button id="btn-toggle-td" class="px-3 py-1 text-xs font-black uppercase border-2 border-slate-950 bg-slate-100 hover:bg-slate-200 rounded transition-all cursor-pointer">關閉 OFF</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 手勢指引面板 -->
+                <div class="mt-auto border border-slate-200 rounded-xl p-4 bg-white/40">
+                  <span class="text-[10px] uppercase font-black tracking-widest text-slate-400 block mb-1">使用指引 Tip</span>
+                  <p class="text-[11px] leading-relaxed text-slate-500 font-semibold">
+                    在右方山脈剖面圖上<b>按住並左右移動滑鼠或手指</b>，即可手動拖曳空氣塊攀爬、下沉山坡，實時觀測絕熱效應！
+                  </p>
+                </div>
+            </div>
+
+            <!-- 區域二 & 三 複合板 (7 欄寬) -->
+            <div class="lg:col-span-7 flex flex-col">
+                
+                <!-- 區域二：可拖曳空氣沿著山脈移動的區域 (SVH 畫布) -->
+                <div id="canvas-container" class="relative overflow-hidden cursor-crosshair bg-gradient-to-b from-blue-50/20 via-white to-slate-50 border-b-2 border-slate-950 select-none pb-1" style="height: 350px;">
+                    <!-- 格線背景 -->
+                    <div class="absolute inset-0 opacity-[0.03]" style="background-image: linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px); background-size: 30px 30px;"></div>
+                    
+                    <svg id="svg-element" class="w-full h-full" viewBox="0 0 800 350" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="windwardGrad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#0044f0" stop-opacity="0.08"/>
+                                <stop offset="100%" stop-color="#0044f0" stop-opacity="0.02"/>
+                            </linearGradient>
+                            <linearGradient id="leewardGrad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#ea580c" stop-opacity="0.02"/>
+                                <stop offset="100%" stop-color="#ea580c" stop-opacity="0.10"/>
+                            </linearGradient>
+                        </defs>
+                        
+                        <!-- 迎/背風背景填充 -->
+                        <rect x="0" y="0" width="400" height="350" fill="url(#windwardGrad)" />
+                        <rect x="400" y="0" width="400" height="350" fill="url(#leewardGrad)" />
+
+                        <!-- 動態氣流伴隨虛線 -->
+                        <path id="windward-flow" d="M 50 260 L 120 280 L 400 80" fill="none" stroke="#3b82f6" stroke-width="2" class="animate-wind-blue opacity-30" />
+                        <path id="leeward-flow" d="M 400 80 L 680 280 L 750 260" fill="none" stroke="#ef4444" stroke-width="2" class="animate-wind-red opacity-30" />
+
+                        <!-- 雲雨動態群組 -->
+                        <g id="cloud-group">
+                            <!-- 藉由 JS 動態生成雨滴、雲朵和潛熱霧化效果 -->
+                        </g>
+
+                        <!-- 山體地形剖面軌跡 -->
+                        <path id="valley-path" d="M 0 280 L 120 280 L 400 80 L 680 280 L 800 280 L 800 350 L 0 350 Z" fill="#f8fafc" stroke="#0f172a" stroke-width="2" />
+                        <path d="M 0 280 L 120 280 L 400 80 L 680 280 L 800 280" fill="none" stroke="#0f172a" stroke-width="3" />
+
+                        <!-- 凝結高度(LCL)水平指示虛線 -->
+                        <line id="lcl-line" x1="0" y1="280" x2="800" y2="280" stroke="#475569" stroke-dasharray="5,5" opacity="0.25" stroke-width="1.5" />
+                        
+                        <!-- 凝結高度文字標籤標牌 -->
+                        <g id="lcl-tag">
+                            <rect x="8" y="235" width="145" height="18" fill="#ffffff" stroke="#0f172a" stroke-width="1" rx="4" opacity="0.9"/>
+                            <text id="lbl-lcl-height" x="14" y="247" font-family="monospace" font-size="9.5" font-weight="bold" fill="#475569">LCL 凝結高度: 1000m</text>
+                        </g>
+
+                        <!-- 主動拖曳空氣塊 Bubble -->
+                        <g id="parcel-element" style="transition: transform 0.05s ease-out;">
+                            <circle id="parcel-glow" r="34" fill="#0044f0" fill-opacity="0.1" />
+                            <circle id="parcel-circle" r="22" fill="#ffffff" stroke="#0f172a" stroke-width="2.5" />
+                            <circle id="parcel-indicator" r="15" fill="#0044f0" fill-opacity="0.85" />
+                            <text id="parcel-text" y="4" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="black" fill="#ffffff">30°</text>
+                        </g>
+                    </svg>
+
+                    <!-- 當前氣流區代表性標牌 -->
+                    <div class="absolute top-4 left-6 text-[11px] font-black tracking-widest text-[#0044f0] bg-white/85 px-2.5 py-1 border border-[#0044f0]/20 rounded font-mono shadow-sm">
+                        ◀ 迎風面 WINDWARD
+                    </div>
+                    <div class="absolute top-4 right-6 text-[11px] font-black tracking-widest text-orange-600 bg-white/85 px-2.5 py-1 border border-orange-500/20 rounded font-mono shadow-sm text-right">
+                        背風面 LEEWARD ▶
+                    </div>
+
+                    <!-- 浮動實時大氣指標面板 (HUD) -->
+                    <div class="absolute bottom-4 left-4 bg-slate-950/90 text-white border border-slate-750 px-4 py-2.5 rounded-xl font-mono text-[11px] space-y-1 shadow-lg pointer-events-none">
+                        <div class="text-slate-400 font-extrabold uppercase tracking-widest text-[9px]">當前空氣塊狀態</div>
+                        <div>高度: <span id="hud-height" class="text-white font-bold">0m</span></div>
+                        <div>溫度: <span id="hud-temp" class="text-[#3b82f6] font-bold">30.0°C</span></div>
+                        <div>濕度: <span id="hud-rh" class="text-emerald-400 font-bold">55%</span> <span id="hud-sat" class="text-xs"></span></div>
+                    </div>
+                </div>
+
+                <!-- 區域三：前後對比分析區域 -->
+                <div id="climate-comparison-analysis" class="p-6 bg-white flex flex-col gap-5">
+                    <div class="flex flex-col gap-3">
+                        <h3 class="text-xs uppercase font-black tracking-widest text-slate-500 font-mono">
+                            ① 迎風起點 vs ② 高山頂峰 vs ③ 背風終點：前後對比分析
+                        </h3>
+                        
+                        <div class="border-2 border-slate-950 rounded-xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] bg-white">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-slate-950 text-white text-[10px] font-black uppercase tracking-wider font-mono">
+                                    <tr>
+                                        <th class="p-3">歷程 Stage</th>
+                                        <th class="p-3">溫度 Temp</th>
+                                        <th class="p-3">露點 Dew Pt</th>
+                                        <th class="p-3">相對濕度 RH</th>
+                                        <th class="p-3">大氣狀態 State</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 font-medium">
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-3 font-bold text-brand-blue text-[#0044f0]">① 迎風起點 (Sea level - W)</td>
+                                        <td class="p-3 font-mono text-slate-900" id="comp-w-temp">30.0°C</td>
+                                        <td class="p-3 font-mono text-slate-600" id="comp-w-dew">20.0°C</td>
+                                        <td class="p-3 font-mono font-bold text-slate-600" id="comp-w-rh">55%</td>
+                                        <td class="p-3"><span class="bg-slate-100 text-slate-700 font-black px-2 py-0.5 rounded text-[9px] uppercase tracking-wide">未飽和</span></td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-3 font-bold text-slate-700">② 高山頂峰 (Mountain Peak)</td>
+                                        <td class="p-3 font-mono text-slate-900" id="comp-p-temp">15.0°C</td>
+                                        <td class="p-3 font-mono text-slate-600" id="comp-p-dew">15.0°C</td>
+                                        <td class="p-3 font-mono font-bold text-slate-600" id="comp-p-rh">100%</td>
+                                        <td class="p-3" id="comp-p-state"><span class="bg-blue-100 text-[#0044f0] font-black px-2 py-0.5 rounded text-[9px] uppercase tracking-wide">已飽和 🌧️</span></td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-3 font-bold text-orange-600">③ 背風終點 (Sea level - L)</td>
+                                        <td class="p-3 font-mono text-rose-600 font-black" id="comp-l-temp">34.0°C</td>
+                                        <td class="p-3 font-mono text-slate-600" id="comp-l-dew">14.0°C</td>
+                                        <td class="p-3 font-mono font-bold text-amber-600" id="comp-l-rh">30%</td>
+                                        <td class="p-3"><span class="bg-orange-50 text-orange-600 font-black px-2 py-0.5 rounded text-[9px] uppercase tracking-wide">乾熱風 Foehn</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 熱力學潛熱效益診斷卡 -->
+                        <div id="gain-alert-card" class="mt-1.5 p-4 border-2 border-slate-950 bg-orange-50 text-orange-950 rounded-xl flex items-center gap-3 shadow-[4px_4px_0px_0px_#ea580c] transition-colors">
+                            <span class="text-xl" id="alert-icon">🔥</span>
+                            <div class="flex-grow">
+                                <h4 class="font-black text-xs uppercase tracking-wider">核心熱力學分析 Insights</h4>
+                                <p class="text-[11px] leading-relaxed opacity-90 mt-0.5 font-medium" id="alert-desc">
+                                    迎風攀升期間溢出飽和水氣（降雨析出）釋放凝結潛熱，致使沉降時絕熱不對稱，海平面溫度淨升溫 4.0°C，相對濕度崩跌 25%。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 邏輯引擎與無編譯純 JS 架構 -->
+    <script>
+        // --- 初始化學術參數 (與 React app 資料互通) ---
+        let initialTemp = 30; // T0
+        let initialDewPoint = 20; // Td0
+        let mountainHeight = 2500; // H
+        let dewPointChanges = false; // Td 是否隨上升遞減 (0.2C/100m)
+        let parcelX = 30; // 預設空氣塊出發進度 30%
+
+        // --- DOM 節點註冊 ---
+        const sT0 = document.getElementById("slider-t0");
+        const sTd0 = document.getElementById("slider-td0");
+        const sH = document.getElementById("slider-h");
+        const btnToggleTd = document.getElementById("btn-toggle-td");
+
+        const valT0 = document.getElementById("val-t0");
+        const valTd0 = document.getElementById("val-td0");
+        const valH = document.getElementById("val-h");
+
+        const hudHeight = document.getElementById("hud-height");
+        const hudTemp = document.getElementById("hud-temp");
+        const hudRh = document.getElementById("hud-rh");
+        const hudSat = document.getElementById("hud-sat");
+
+        const canvasContainer = document.getElementById("canvas-container");
+        const parcelElement = document.getElementById("parcel-element");
+        const parcelText = document.getElementById("parcel-text");
+        const parcelIndicator = document.getElementById("parcel-indicator");
+        const parcelGlow = document.getElementById("parcel-glow");
+        
+        const lclLine = document.getElementById("lcl-line");
+        const lblLclHeight = document.getElementById("lbl-lcl-height");
+        const lclTag = document.getElementById("lcl-tag");
+        const cloudGroup = document.getElementById("cloud-group");
+
+        const compWTemp = document.getElementById("comp-w-temp");
+        const compWDew = document.getElementById("comp-w-dew");
+        const compWRh = document.getElementById("comp-w-rh");
+
+        const compPTemp = document.getElementById("comp-p-temp");
+        const compPDew = document.getElementById("comp-p-dew");
+        const compPRh = document.getElementById("comp-p-rh");
+        const compPState = document.getElementById("comp-p-state");
+
+        const compLTemp = document.getElementById("comp-l-temp");
+        const compLDew = document.getElementById("comp-l-dew");
+        const compLRh = document.getElementById("comp-l-rh");
+
+        const alertIcon = document.getElementById("alert-icon");
+        const alertDesc = document.getElementById("alert-desc");
+        const alertCard = document.getElementById("gain-alert-card");
+
+        // --- August-Roche-Magnus 近似公式 ---
+        function calculateRH(temp, dewPoint) {
+            if (dewPoint >= temp) return 100;
+            const es = 6.11 * Math.pow(10, (7.5 * temp) / (237.3 + temp));
+            const e = 6.11 * Math.pow(10, (7.5 * dewPoint) / (237.3 + dewPoint));
+            return Math.min(100, Math.max(0, Math.round((e / es) * 100)));
+        }
+
+        // --- 熱力學與高度映射引擎核心 ---
+        function getStatsAtX(xVal) {
+            let h = 0;
+            let isLeeward = false;
+
+            // 高度轉換 0%~100%
+            if (xVal <= 15) {
+                h = 0;
+            } else if (xVal <= 50) {
+                h = ((xVal - 15) / 35) * mountainHeight;
+            } else if (xVal <= 85) {
+                h = (1 - ((xVal - 50) / 35)) * mountainHeight;
+                isLeeward = true;
+            } else {
+                h = 0;
+                isLeeward = true;
+            }
+
+            const r_td = dewPointChanges ? 0.2 : 0.0;
+            const lapse_diff = 1.0 - r_td;
+            
+            // 計算 LCL (凝結高度)
+            const lcl = lapse_diff > 0 ? ((initialTemp - initialDewPoint) / lapse_diff) * 100 : 0;
+
+            let temp = initialTemp;
+            let dewPoint = initialDewPoint;
+            let isSaturated = false;
+
+            if (!isLeeward) {
+                // --- 迎風攀升段 ---
+                if (h <= lcl) {
+                    temp = initialTemp - (h / 100) * 1.0;
+                    dewPoint = initialDewPoint - (h / 100) * r_td;
+                    isSaturated = h > 0 && Math.abs(temp - dewPoint) < 0.05;
+                } else {
+                    const tempAtLcl = initialTemp - (lcl / 100) * 1.0;
+                    temp = tempAtLcl - ((h - lcl) / 100) * 0.6;
+                    dewPoint = temp;
+                    isSaturated = true;
+                }
+            } else {
+                // --- 背風下沉段 ---
+                let peakTemp = initialTemp;
+                let peakDewPoint = initialDewPoint;
+                if (mountainHeight <= lcl) {
+                    peakTemp = initialTemp - (mountainHeight / 100) * 1.0;
+                    peakDewPoint = initialDewPoint - (mountainHeight / 100) * r_td;
+                } else {
+                    const tempAtLcl = initialTemp - (lcl / 100) * 1.0;
+                    peakTemp = tempAtLcl - ((mountainHeight - lcl) / 100) * 0.6;
+                    peakDewPoint = peakTemp;
+                }
+
+                const diffH = mountainHeight - h;
+                temp = peakTemp + (diffH / 100) * 1.0;
+                dewPoint = peakDewPoint + (diffH / 100) * r_td;
+
+                if (dewPoint > temp) dewPoint = temp;
+                isSaturated = false; 
+            }
+
+            return {
+                height: Math.round(h),
+                temp: Number(temp.toFixed(1)),
+                dewPoint: Number(dewPoint.toFixed(1)),
+                rh: calculateRH(temp, dewPoint),
+                isSaturated,
+                isLeeward,
+                lcl: Math.round(lcl)
+            };
+        }
+
+        // --- 主動渲染更新函數 ---
+        function updateSimulation() {
+            // 讀取 slider 極限限制
+            sTd0.max = initialTemp;
+            if (initialDewPoint > initialTemp) {
+                initialDewPoint = initialTemp;
+                sTd0.value = initialTemp;
+            }
+
+            // 更新參數文字
+            valT0.textContent = initialTemp;
+            valTd0.textContent = initialDewPoint;
+            valH.textContent = mountainHeight;
+
+            // 取得實時熱力狀態
+            const current = getStatsAtX(parcelX);
+
+            // 1. 更新 HUD 儀表面板訊息
+            hudHeight.textContent = current.height + "m";
+            hudTemp.textContent = current.temp.toFixed(1) + "°C";
+            hudRh.textContent = current.rh + "%";
+            if (current.isSaturated) {
+                hudSat.textContent = " (🌧️ 飽和降雨)";
+                hudSat.className = "text-[#3b82f6] font-bold";
+            } else {
+                hudSat.textContent = "";
+            }
+
+            // 2. 更新空氣塊(Parcel) SVG 座標
+            const visualX = (parcelX / 100) * 800;
+            const ratio = current.height / mountainHeight;
+            const visualY = 280 - ratio * 200; // Peak @ 80px, Base @ 280px
+
+            parcelElement.setAttribute("transform", "translate(" + visualX + ", " + visualY + ")");
+            parcelText.textContent = current.isSaturated ? "🌧️" : Math.round(current.temp) + "°";
+
+            // 空氣塊球體光暈切換
+            if (current.isSaturated) {
+                parcelIndicator.setAttribute("fill", "#0284c7");
+                parcelGlow.setAttribute("fill", "#0284c7");
+            } else if (current.isLeeward) {
+                parcelIndicator.setAttribute("fill", "#ea580c");
+                parcelGlow.setAttribute("fill", "#ea580c");
+            } else {
+                parcelIndicator.setAttribute("fill", "#0044f0");
+                parcelGlow.setAttribute("fill", "#0044f0");
+            }
+
+            // 3. 更新 LCL 指示線
+            const lcl = current.lcl;
+            if (lcl < mountainHeight && lcl > 0) {
+                const lclRatio = lcl / mountainHeight;
+                const lclY = 280 - lclRatio * 200;
+                lclLine.setAttribute("y1", lclY);
+                lclLine.setAttribute("y2", lclY);
+                lclLine.setAttribute("opacity", "0.25");
+                lblLclHeight.textContent = "LCL 凝結高度: " + lcl + "m";
+                lclTag.setAttribute("transform", "translate(10, " + (lclY - 23) + ")");
+                lclTag.style.display = "block";
+            } else {
+                lclLine.setAttribute("opacity", "0");
+                lclTag.style.display = "none";
+            }
+
+            // 4. 雨、雲朵生成矩置
+            if (lcl < mountainHeight) {
+                const lclPct = 15 + (lcl / mountainHeight) * 35;
+                const cloudStartX = (lclPct / 100) * 800;
+                const cloudStartY = 280 - (lcl / mountainHeight) * 200;
+                
+                let cloudHTML = "";
+
+                // 當空氣塊位於凝結高度與山頂之間攀升時, 渲染落雨粒子動畫
+                if (parcelX >= lclPct && parcelX <= 50) {
+                    for (let d = 0; d < 12; d++) {
+                        const rX = cloudStartX + Math.random() * (400 - cloudStartX);
+                        const rY = cloudStartY + Math.random() * (80 - cloudStartY) + 25;
+                        cloudHTML += '<line x1="' + rX + '" y1="' + rY + '" x2="' + (rX - 2) + '" y2="' + (rY + 15) + '" stroke="#2563eb" stroke-width="1.5" class="animate-rain" style="animation-delay: ' + (d * 0.08) + 's" opacity="0.65"/>';
+                    }
+                }
+
+                // 一體化精美冷凝雲朵 SVG Draping
+                cloudHTML += '<path d="M ' + cloudStartX + ' ' + (cloudStartY - 10) + ' Q ' + ((cloudStartX + 400) / 2) + ' ' + (cloudStartY - 35) + ' 400 70 L 400 80 Q ' + ((cloudStartX + 400) / 2) + ' ' + (cloudStartY + 15) + ' ' + cloudStartX + ' ' + cloudStartY + ' Z" fill="#e2e8f0" fill-opacity="0.8" stroke="#cbd5e1" stroke-width="1.5" />';
+                cloudHTML += '<circle cx="' + cloudStartX + '" cy="' + (cloudStartY - 10) + '" r="18" fill="#e2e8f0" fill-opacity="0.85" />';
+                cloudHTML += '<circle cx="280" cy="140" r="32" fill="#f1f5f9" fill-opacity="0.85" />';
+                cloudHTML += '<circle cx="330" cy="110" r="28" fill="#f1f5f9" fill-opacity="0.85" />';
+                cloudHTML += '<circle cx="370" cy="85" r="26" fill="#f1f5f9" fill-opacity="0.85" />';
+                
+                cloudGroup.innerHTML = cloudHTML;
+            } else {
+                cloudGroup.innerHTML = "";
+            }
+
+            // 5. 更新對比數據表格 (里程碑比較)
+            const stW = getStatsAtX(0);   // 起點
+            const stP = getStatsAtX(50);  // 山頂
+            const stL = getStatsAtX(100); // 終點
+
+            compWTemp.textContent = stW.temp.toFixed(1) + "°C";
+            compWDew.textContent = stW.dewPoint.toFixed(1) + "°C";
+            compWRh.textContent = stW.rh + "%";
+
+            compPTemp.textContent = stP.temp.toFixed(1) + "°C";
+            compPDew.textContent = stP.dewPoint.toFixed(1) + "°C";
+            compPRh.textContent = stP.rh + "%";
+            if (stP.isSaturated) {
+                compPState.innerHTML = '<span class="bg-blue-100 text-[#0044f0] font-black px-2 py-0.5 rounded text-[9px] uppercase tracking-wide flex items-center gap-0.5 w-max">已飽和 🌧️</span>';
+            } else {
+                compPState.innerHTML = '<span class="bg-slate-50 text-slate-500 font-bold px-2 py-0.5 rounded text-[9px] uppercase tracking-wide">未飽和</span>';
+            }
+
+            compLTemp.textContent = stL.temp.toFixed(1) + "°C";
+            compLDew.textContent = stL.dewPoint.toFixed(1) + "°C";
+            compLRh.textContent = stL.rh + "%";
+
+            // 6. 熱力學強弱診斷文字
+            const tempDiff = (stL.temp - stW.temp).toFixed(1);
+            const rhDiff = stW.rh - stL.rh;
+
+            if (Number(tempDiff) > 0.1) {
+                alertCard.className = "mt-1.5 p-4 border-2 border-slate-950 bg-orange-50 text-orange-950 rounded-xl flex items-center gap-3 shadow-[4px_4px_0px_0px_#ea580c] transition-colors";
+                alertIcon.textContent = "🔥";
+                alertDesc.innerHTML = "迎風攀升期間溢出飽和水氣（降雨析出）釋放凝結潛熱，致使沉降時絕熱冷熱過程不對稱，海平面<b>淨溫升 +" + tempDiff + "°C</b>，相對濕度<b>跌幅 " + rhDiff + "%</b>。";
+            } else {
+                alertCard.className = "mt-1.5 p-4 border-2 border-slate-950 bg-slate-50 text-slate-800 rounded-xl flex items-center gap-3 shadow-[4px_4px_0px_0px_#475569] transition-colors";
+                alertIcon.textContent = "🌬️";
+                alertDesc.innerHTML = "空氣過度乾燥，未達迎風面凝結高度（LCL " + lcl + "m &gt; 山頂 " + mountainHeight + "m）。前後升降完全對稱，無降雨析出，兩側不產生焚風增溫現象。";
+            }
+        }
+
+        // --- 核心手勢滑動 / 拖曳事件阻斷 ---
+        function handleDragAndPos(clientX) {
+            const rect = canvasContainer.getBoundingClientRect();
+            const relativeX = clientX - rect.left;
+            parcelX = Math.min(100, Math.max(0, (relativeX / rect.width) * 100));
+            updateSimulation();
+        }
+
+        canvasContainer.addEventListener("mousedown", (e) => {
+            handleDragAndPos(e.clientX);
+            
+            function onMouseMove(moveEvent) {
+                handleDragAndPos(moveEvent.clientX);
+            }
+            function onMouseUp() {
+                window.removeEventListener("mousemove", onMouseMove);
+                window.removeEventListener("mouseup", onMouseUp);
+            }
+            window.addEventListener("mousemove", onMouseMove);
+            window.addEventListener("mouseup", onMouseUp);
+        });
+
+        canvasContainer.addEventListener("touchstart", (e) => {
+            handleDragAndPos(e.touches[0].clientX);
+            
+            function onTouchMove(moveEvent) {
+                handleDragAndPos(moveEvent.touches[0].clientX);
+            }
+            function onTouchEnd() {
+                window.removeEventListener("touchmove", onTouchMove);
+                window.removeEventListener("touchend", onTouchEnd);
+            }
+            window.addEventListener("touchmove", onTouchMove, { passive: true });
+            window.addEventListener("touchend", onTouchEnd);
+        }, { passive: true });
+
+        // --- 控制滑桿阻斷監聽 ---
+        sT0.addEventListener("input", (e) => {
+            initialTemp = Number(e.target.value);
+            updateSimulation();
+        });
+
+        sTd0.addEventListener("input", (e) => {
+            initialDewPoint = Number(e.target.value);
+            updateSimulation();
+        });
+
+        sH.addEventListener("input", (e) => {
+            mountainHeight = Number(e.target.value);
+            updateSimulation();
+        });
+
+        // 露點遞減開關 toggle
+        btnToggleTd.addEventListener("click", () => {
+            dewPointChanges = !dewPointChanges;
+            btnToggleTd.textContent = dewPointChanges ? "開啟 ON" : "關閉 OFF";
+            btnToggleTd.className = dewPointChanges 
+                ? "px-3 py-1 text-xs font-black uppercase border-2 border-slate-950 bg-slate-950 text-white rounded transition-all cursor-pointer"
+                : "px-3 py-1 text-xs font-black uppercase border-2 border-slate-950 bg-slate-100 text-slate-800 rounded transition-all cursor-pointer";
+            updateSimulation();
+        });
+
+        // 首度初始化
+        updateSimulation();
+    </script>
+</body>
+</html>
